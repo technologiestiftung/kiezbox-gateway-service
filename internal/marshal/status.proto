@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package meshtastic;
 
-option go_package = "kiezbox/status";
+option go_package = "kiezbox/internal/marshal";
 
 /*
  * This message is used for

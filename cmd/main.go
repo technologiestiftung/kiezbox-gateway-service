@@ -1,45 +1,22 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"github.com/joho/godotenv"
 
-	"kiezbox/status"
+	config "kiezbox/internal/config"
+	db "kiezbox/internal/db"
+	marshal "kiezbox/internal/marshal" // TODO: is the alias redundant?
 )
 
 func main() {
-	// Load environment variables from .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-
-	// Fetch InfluxDB configuration from environment variables
-	url := os.Getenv("INFLUXDB_URL")
-	token := os.Getenv("INFLUXDB_TOKEN")
-	org := os.Getenv("INFLUXDB_ORG")
-	bucket := os.Getenv("INFLUXDB_BUCKET")
-
-	// Check if any required variable is missing
-	if url == "" || token == "" || org == "" || bucket == "" {
-		log.Fatal("Missing one or more required environment variables")
-	}
-
-	// Create a new InfluxDB client
-	client := influxdb2.NewClient(url, token)
-	defer client.Close()
-
-	// Create a write API
-	writeAPI := client.WriteAPIBlocking(org, bucket)
-
+	// --- Mock Kiezbox data, marshalling and unmarshalling ---
+	
 	// Step 1: Create a new KiezboxStatus message
-	statusData := &status.KiezboxStatus{
+	statusData := &marshal.KiezboxStatus{
 		BoxId:            1,
 		DistId:           101,
 		RouterPowered:    true,
@@ -56,20 +33,27 @@ func main() {
 		TemperatureRtc:   20000,  // 20°C in milli Celsius
 	}
 
-	// Marshal the SensorData message
-	marshalledData, err := status.MarshalKiezboxStatus(statusData)
+	// Marshal
+	marshalledData, err := marshal.MarshalKiezboxStatus(statusData)
 	if err != nil {
 		log.Fatalf("Error marshalling data: %v", err)
 	}
 
-	// Display the marshalled data
 	fmt.Printf("Marshalled Data: %x\n", marshalledData)
 
-	// Unmarshal the data back into a SensorData message
-	unmarshalledData, err := status.UnmarshalKiezboxStatus(marshalledData)
+	// Unmarshal
+	unmarshalledData, err := marshal.UnmarshalKiezboxStatus(marshalledData)
 	if err != nil {
 		log.Fatalf("Error unmarshalling data: %v", err)
 	}
+
+	// --- Write data to the DB
+	// Load InfluxDB configuration
+	url, token, org, bucket := config.LoadConfig()
+
+	// Initialize InfluxDB client
+	db_client := db.CreateClient(url, token, org, bucket)
+	defer db_client.Close()
 
 	// Prepare the InfluxDB point
 	point := influxdb2.NewPoint(
@@ -99,16 +83,13 @@ func main() {
 	)
 
 	// Write the point to InfluxDB
-	if err := writeAPI.WritePoint(context.Background(), point); err != nil {
-		log.Fatalf("Failed to write data: %v", err)
+	if err := db_client.WriteData(point); err != nil {
+		log.Fatalf("Error writing data: %v", err)
 	}
 
 	fmt.Println("Data written to InfluxDB successfully")
 
-	// --- Retrieving Data from InfluxDB ---
-	// Create a query API
-	queryAPI := client.QueryAPI(org)
-
+	// --- Retrieve Data from InfluxDB ---
 	// Define a Flux query to retrieve sensor data
 	query := fmt.Sprintf(`
 		from(bucket: "%s")
@@ -120,9 +101,9 @@ func main() {
 	`, bucket)
 
 	// Execute the query
-	result, err := queryAPI.Query(context.Background(), query)
+	result, err := db_client.QueryData(query)
 	if err != nil {
-		log.Fatalf("Error executing query: %v", err)
+		log.Fatalf("Error querying data: %v", err)
 	}
 
 	// Iterate over the query result and print the data
@@ -141,5 +122,4 @@ func main() {
 	}
 
 	fmt.Println("Data retrieved from InfluxDB successfully")
-
 }
