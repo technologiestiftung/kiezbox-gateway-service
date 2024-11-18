@@ -3,7 +3,7 @@
 Automatic Go code generation based on the proto file.
 
 ```
-protoc -I=. --go_out=. --go_opt=paths=source_relative status/status.proto
+protoc -I=. --go_out=. --go_opt=paths=source_relative internal/marshal/status.proto
 ```
 
 Create a kiezbox module.
@@ -20,5 +20,5 @@ go mod tidy
 
 Run the main fail to test the module.
 ```
-go run main.go
+go run cmd/main.go
 ```
