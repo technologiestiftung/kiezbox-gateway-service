@@ -9,6 +9,7 @@ import (
 
 	config "kiezbox/internal/config"
 	db "kiezbox/internal/db"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 	marshal "kiezbox/internal/marshal" // TODO: is the alias redundant?
 )
 
@@ -16,25 +17,25 @@ func main() {
 	// --- Mock Kiezbox data, marshalling and unmarshalling ---
 	
 	// Step 1: Create a new KiezboxStatus message
-	statusData := &marshal.KiezboxStatus{
-		BoxId:            1,
-		DistId:           101,
-		RouterPowered:    true,
-		UnixTime:         time.Now().Unix(),
-		TemperatureOut:   25000,  // 25°C in milli Celsius
-		TemperatureIn:    22000,  // 22°C in milli Celsius
-		HumidityIn:       50000,  // 50% in milli Percentage
-		SolarVoltage:     12000,  // 12V in milli Volts
-		SolarPower:       150,    // 1.5W in deci Watts
-		SolarEnergyDay:   5000,   // 50 dW (0.5W) collected today
-		SolarEnergyTotal: 100000, // 1000 dW (10W) collected total
-		BatteryVoltage:   3700,   // 3.7V in milli Volts
-		BatteryCurrent:   500,    // 500mA
-		TemperatureRtc:   20000,  // 20°C in milli Celsius
+	statusData := &generated.KiezboxMessage{
+		Update: &generated.KiezboxMessage_Update{
+			Meta: &generated.KiezboxMessage_Meta{
+				BoxId:  1, // Example value
+				DistId: 2, // Example value
+			},
+			UnixTime: time.Now().Unix(), // Current Unix timestamp
+			Core: &generated.KiezboxMessage_Core{
+				Mode: generated.KiezboxMessage_normal, // Required field
+				Router: &generated.KiezboxMessage_Router{
+					Powered: true, // Example value
+				},
+				Values: &generated.KiezboxMessage_CoreValues{}, // Required, but no optional fields set
+			},
+		},
 	}
 
 	// Marshal
-	marshalledData, err := marshal.MarshalKiezboxStatus(statusData)
+	marshalledData, err := marshal.MarshalKiezboxMessage(statusData)
 	if err != nil {
 		log.Fatalf("Error marshalling data: %v", err)
 	}
@@ -42,7 +43,7 @@ func main() {
 	fmt.Printf("Marshalled Data: %x\n", marshalledData)
 
 	// Unmarshal
-	unmarshalledData, err := marshal.UnmarshalKiezboxStatus(marshalledData)
+	unmarshalledData, err := marshal.UnmarshalKiezboxMessage(marshalledData)
 	if err != nil {
 		log.Fatalf("Error unmarshalling data: %v", err)
 	}
@@ -61,25 +62,17 @@ func main() {
 		"sensor_data",
 		// Tags
 		map[string]string{
-			"box_id":   fmt.Sprintf("%d", unmarshalledData.BoxId),
-			"district": fmt.Sprintf("%d", unmarshalledData.DistId),
+			"box_id":   fmt.Sprintf("%d", unmarshalledData.Update.Meta.BoxId),
+			"district": fmt.Sprintf("%d", unmarshalledData.Update.Meta.DistId),
 		},
 		// Fields
-		map[string]interface{}{
-			"router_powered":     unmarshalledData.RouterPowered,
-			"temperature_out":    float32(unmarshalledData.TemperatureOut) / 1000, // Converting to float32 and °C
-			"temperature_in":     float32(unmarshalledData.TemperatureIn) / 1000,
-			"humidity_in":        float32(unmarshalledData.HumidityIn) / 1000,
-			"solar_voltage":      float32(unmarshalledData.SolarVoltage) / 1000,
-			"solar_power":        float32(unmarshalledData.SolarPower) / 100,
-			"solar_energy_day":   float32(unmarshalledData.SolarEnergyDay) / 100,
-			"solar_energy_total": float32(unmarshalledData.SolarEnergyTotal) / 100,
-			"battery_voltage":    float32(unmarshalledData.BatteryVoltage) / 1000,
-			"battery_current":    unmarshalledData.BatteryCurrent,
-			"rtc_temperature":    float32(unmarshalledData.TemperatureRtc) / 1000,
+		map[string]any{
+			"router_powered":     unmarshalledData.Update.Core.Router.Powered,
+			"temperature_out":    float32(unmarshalledData.Update.Core.Values.TempOut) / 1000, // Converting to float32 and °C
+			"temperature_in":     float32(unmarshalledData.Update.Core.Values.TempIn) / 1000,
 		},
 		// Timestamp
-		time.Unix(unmarshalledData.UnixTime, 0),
+		time.Unix(unmarshalledData.Update.UnixTime, 0),
 	)
 
 	// Write the point to InfluxDB
