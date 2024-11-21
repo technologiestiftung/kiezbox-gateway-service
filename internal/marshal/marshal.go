@@ -1,13 +1,15 @@
-package status
+package marshal
 
 import (
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
+
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
 
 // Marshals KiexboxStatus message into a byte slice.
-func MarshalKiezboxStatus(data *KiezboxStatus) ([]byte, error) {
+func MarshalKiezboxMessage(data *generated.KiezboxMessage) ([]byte, error) {
 	marshalledData, err := proto.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal SensorData: %w", err)
@@ -16,8 +18,8 @@ func MarshalKiezboxStatus(data *KiezboxStatus) ([]byte, error) {
 }
 
 // Unmarshals the byte slice back into a KiezboxStatus message.
-func UnmarshalKiezboxStatus(data []byte) (*KiezboxStatus, error) {
-	var sensorData KiezboxStatus
+func UnmarshalKiezboxMessage(data []byte) (*generated.KiezboxMessage, error) {
+	var sensorData generated.KiezboxMessage
 	err := proto.Unmarshal(data, &sensorData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal SensorData: %w", err)

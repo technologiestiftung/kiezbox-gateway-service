@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  influxdb_data:

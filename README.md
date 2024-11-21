@@ -1,9 +1,29 @@
 # Instructions
 
-Automatic Go code generation based on the proto file.
+Initialize the database.
 
 ```
-protoc -I=. --go_out=. --go_opt=paths=source_relative status/status.proto
+docker compose up
+```
+
+Update the protobufs submodule, if you want to generate the 
+
+```
+git submodule update --init
+```
+
+## Protobuf > pb.go generation
+
+First, update the protobufs submodule.
+
+```
+git submodule update --init
+```
+
+Then run this command tu generate the Go code based on the protobuf.
+
+```
+protoc -I=. --go_out=internal protobufs/meshtastic/kiezbox_control.proto
 ```
 
 Create a kiezbox module.
@@ -20,5 +40,5 @@ go mod tidy
 
 Run the main fail to test the module.
 ```
-go run main.go
+go run cmd/main.go
 ```
