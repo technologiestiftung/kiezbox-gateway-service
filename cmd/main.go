@@ -15,6 +15,7 @@ import (
         "github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/encoding/prototext"
+        "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -57,22 +58,28 @@ func main() {
 	for message := range protoChan {
 		fmt.Println("Handling Protobuf message")
                 debugPrintProtobuf(message)
+                tags := make(map[string]string)
+                fields := make(map[string]any)
+                meta_reflect := message.Update.Meta.ProtoReflect()
+                meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+                        // Get the meta tags
+                        tags[string(fd.Name())] = v.String()
+                        return true // Continue iteration
+                })
+                core_reflect := message.Update.Core.Values.ProtoReflect()
+                core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+                        // Get the fields
+                        fields[string(fd.Name())] = v.Interface()
+                        return true // Continue iteration
+                })
                 // Prepare the InfluxDB point
                 point := influxdb2.NewPoint(
                         // Measurement
-                        "sensor_data",
+                        "core_values",
                         // Tags
-                        map[string]string{
-                                "box_id":   fmt.Sprintf("%d", message.Update.Meta.BoxId),
-                                "district": fmt.Sprintf("%d", message.Update.Meta.DistId),
-                        },
+                        tags,
                         // Fields
-                        map[string]any{
-                                "router_powered":     message.Update.Core.Router.Powered,
-                                "temperature_out":    float32(message.Update.Core.Values.TempOut) / 1000, // Converting to float32 and °C
-                                "temperature_in":     float32(message.Update.Core.Values.TempIn) / 1000,
-                                "humidity_in":     float32(message.Update.Core.Values.HumidIn) / 1000,
-                        },
+                        fields,
                         // Timestamp
                         //time.Unix(message.Update.UnixTime, 0),
                         time.Now(),
