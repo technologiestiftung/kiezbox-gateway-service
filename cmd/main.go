@@ -7,15 +7,15 @@ import (
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 
+	"bytes"
+	"encoding/binary"
+	"github.com/tarm/serial"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	config "kiezbox/internal/config"
 	db "kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
-	"bytes"
-	"encoding/binary"
-        "github.com/tarm/serial"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/encoding/prototext"
-        "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 
 func main() {
 	// --- Mock Kiezbox data, marshalling and unmarshalling ---
-    	// Configure the serial port with baud rate and other settings.
+	// Configure the serial port with baud rate and other settings.
 	serialconfig := &serial.Config{
 		Name: "/dev/ttyUSB0", // Replace with your serial port
 		Baud: 115200,         // Set the desired baud rate here
@@ -45,7 +45,6 @@ func main() {
 	// Launch a goroutine for serial reading.
 	go readSerial(port, protoChan)
 
-	// --- Write data to the DB
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
 
@@ -54,44 +53,44 @@ func main() {
 	defer db_client.Close()
 
 	// Process Protobuf messages in the main goroutine.
-        //TODO: move this into it's own gorouting
+	//TODO: move this into it's own gorouting
 	for message := range protoChan {
 		fmt.Println("Handling Protobuf message")
-                debugPrintProtobuf(message)
-                tags := make(map[string]string)
-                fields := make(map[string]any)
-                meta_reflect := message.Update.Meta.ProtoReflect()
-                meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-                        // Get the meta tags
-                        tags[string(fd.Name())] = v.String()
-                        return true // Continue iteration
-                })
-                core_reflect := message.Update.Core.Values.ProtoReflect()
-                core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-                        // Get the fields
-                        fields[string(fd.Name())] = v.Interface()
-                        return true // Continue iteration
-                })
-                // Prepare the InfluxDB point
-                point := influxdb2.NewPoint(
-                        // Measurement
-                        "core_values",
-                        // Tags
-                        tags,
-                        // Fields
-                        fields,
-                        // Timestamp
-                        //time.Unix(message.Update.UnixTime, 0),
-                        time.Now(),
-                )
-                fmt.Printf("Addint point: %+v\n", point)
+		debugPrintProtobuf(message)
+		tags := make(map[string]string)
+		fields := make(map[string]any)
+		meta_reflect := message.Update.Meta.ProtoReflect()
+		meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			// Get the meta tags
+			tags[string(fd.Name())] = v.String()
+			return true // Continue iteration
+		})
+		core_reflect := message.Update.Core.Values.ProtoReflect()
+		core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			// Get the fields
+			fields[string(fd.Name())] = v.Interface()
+			return true // Continue iteration
+		})
+		// Prepare the InfluxDB point
+		point := influxdb2.NewPoint(
+			// Measurement
+			"core_values",
+			// Tags
+			tags,
+			// Fields
+			fields,
+			// Timestamp
+			//time.Unix(message.Update.UnixTime, 0),
+			time.Now(),
+		)
+		fmt.Printf("Addint point: %+v\n", point)
 
-                // Write the point to InfluxDB
-                err := db_client.WriteData(point)
-                fmt.Println("Writing data:", err)
+		// Write the point to InfluxDB
+		err := db_client.WriteData(point)
+		fmt.Println("Writing data:", err)
 
-                fmt.Println("Data written to InfluxDB successfully")
-        }
+		fmt.Println("Data written to InfluxDB successfully")
+	}
 
 	// --- Retrieve Data from InfluxDB ---
 	// Define a Flux query to retrieve sensor data
@@ -132,27 +131,27 @@ func readSerial(port *serial.Port, protoChan chan<- *generated.KiezboxMessage) {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
 
-        radioConfig := &generated.ToRadio{
-            PayloadVariant: &generated.ToRadio_WantConfigId{
-                WantConfigId: 32,
-            },
-        }
-        fmt.Println("radioConfig:", radioConfig)
-        fmt.Printf("ToRadio message: %+v\n", radioConfig)
-        configMarshalled, err := proto.Marshal(radioConfig)
+	radioConfig := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_WantConfigId{
+			WantConfigId: 32,
+		},
+	}
+	fmt.Println("radioConfig:", radioConfig)
+	fmt.Printf("ToRadio message: %+v\n", radioConfig)
+	configMarshalled, err := proto.Marshal(radioConfig)
 	if err != nil {
 		fmt.Println("failed to marshal SensorData: %w", err)
 	}
-        hex := fmt.Sprintf("%x", configMarshalled)
-        fmt.Printf("radioMarshalled: 0x%s\n", hex)
-        configLen := len(configMarshalled)
-        configHeader := []byte{
-            start1,
-            start2,
-            byte((configLen >> 8) & 0xFF),
-            byte(configLen & 0xFF),
-        }
-        packet := append(configHeader, configMarshalled...)
+	hex := fmt.Sprintf("%x", configMarshalled)
+	fmt.Printf("radioMarshalled: 0x%s\n", hex)
+	configLen := len(configMarshalled)
+	configHeader := []byte{
+		start1,
+		start2,
+		byte((configLen >> 8) & 0xFF),
+		byte(configLen & 0xFF),
+	}
+	packet := append(configHeader, configMarshalled...)
 
 	// Debug output
 	log.Printf("Sending packet (Hex): %x\n", packet)
@@ -182,7 +181,7 @@ func readSerial(port *serial.Port, protoChan chan<- *generated.KiezboxMessage) {
 				// ascii := debugBuffer.String()
 				// hex := fmt.Sprintf("%x", debugBuffer.Bytes())
 				// fmt.Printf("DEBUG (ASCII): %s\n", ascii)
-                                // fmt.Printf("Debug output (Hex): %s\n", hex)
+				// fmt.Printf("Debug output (Hex): %s\n", hex)
 				debugBuffer.Reset()
 			} else {
 				debugBuffer.WriteByte(b)
@@ -218,37 +217,37 @@ func readSerial(port *serial.Port, protoChan chan<- *generated.KiezboxMessage) {
 				// Log Protobuf frame details for debugging.
 				fmt.Printf("Protobuf frame detected! Length: %d bytes\n", protoLen)
 				fmt.Printf("Protobuf frame (Hex): %x\n", protobufMsg)
-                                var fromRadio generated.FromRadio
-                                err := proto.Unmarshal(protobufMsg, &fromRadio)
-                                if err != nil {
-                                        fmt.Println("failed to unmarshal fromRadio: %w", err)
-                                }
-                                debugPrintProtobuf(&fromRadio)
-                                switch v := fromRadio.PayloadVariant.(type) {
-                                case *generated.FromRadio_Packet:
-                                    debugPrintProtobuf(v.Packet)
-                                    switch v := v.Packet.PayloadVariant.(type) {
-                                    case *generated.MeshPacket_Decoded:
-                                        debugPrintProtobuf(v.Decoded)
-                                        switch v.Decoded.Portnum {
-                                        case generated.PortNum_KIEZBOX_CONTROL_APP:
-                                            var KiezboxMessage generated.KiezboxMessage
-                                            err := proto.Unmarshal(v.Decoded.Payload, &KiezboxMessage)
-                                            if err != nil {
-                                                    fmt.Println("failed to unmarshal KiezboxMessage: %w", err)
-                                            }
-                                            debugPrintProtobuf(&KiezboxMessage)
-                                            // Send the protobuf message to the processing goroutine.
-                                            protoChan <- &KiezboxMessage
-                                        default:
-                                            fmt.Println("Payload variant not a Kiezbox Message")
-                                        }
-                                    default:
-                                        fmt.Println("Payload variant is encrypted")
-                                    }
-                                default:
-                                    fmt.Println("Payload variant is not 'packet'")
-                                }
+				var fromRadio generated.FromRadio
+				err := proto.Unmarshal(protobufMsg, &fromRadio)
+				if err != nil {
+					fmt.Println("failed to unmarshal fromRadio: %w", err)
+				}
+				debugPrintProtobuf(&fromRadio)
+				switch v := fromRadio.PayloadVariant.(type) {
+				case *generated.FromRadio_Packet:
+					debugPrintProtobuf(v.Packet)
+					switch v := v.Packet.PayloadVariant.(type) {
+					case *generated.MeshPacket_Decoded:
+						debugPrintProtobuf(v.Decoded)
+						switch v.Decoded.Portnum {
+						case generated.PortNum_KIEZBOX_CONTROL_APP:
+							var KiezboxMessage generated.KiezboxMessage
+							err := proto.Unmarshal(v.Decoded.Payload, &KiezboxMessage)
+							if err != nil {
+								fmt.Println("failed to unmarshal KiezboxMessage: %w", err)
+							}
+							debugPrintProtobuf(&KiezboxMessage)
+							// Send the protobuf message to the processing goroutine.
+							protoChan <- &KiezboxMessage
+						default:
+							fmt.Println("Payload variant not a Kiezbox Message")
+						}
+					default:
+						fmt.Println("Payload variant is encrypted")
+					}
+				default:
+					fmt.Println("Payload variant is not 'packet'")
+				}
 				// Remove the processed message from the buffer.
 				buffer.Reset()
 			}
