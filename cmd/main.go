@@ -249,8 +249,6 @@ func readSerial(port *serial.Port, protoChan chan<- *generated.KiezboxMessage) {
                                 default:
                                     fmt.Println("Payload variant is not 'packet'")
                                 }
-
-
 				// Remove the processed message from the buffer.
 				buffer.Reset()
 			}

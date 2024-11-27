@@ -23,7 +23,7 @@ git submodule update --init
 Then run this command tu generate the Go code based on the protobuf.
 
 ```
-protoc -I=protobufs/ --go_out=internal protobufs/meshtastic/*.proto
+protoc -I=protobufs/ --go_out=internal protobufs/meshtastic/*.proto protobufs/nanopb.proto
 ```
 
 Create a kiezbox module.
