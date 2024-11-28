@@ -2,13 +2,13 @@ package meshtastic
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"github.com/tarm/serial"
+	"google.golang.org/protobuf/proto"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"math/rand"
 	"time"
-	"encoding/binary"
-	"github.com/tarm/serial"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -18,35 +18,35 @@ const (
 )
 
 type MTSerial struct {
-    conf        *serial.Config
-    port        *serial.Port
-    config_id   uint32
+	conf      *serial.Config
+	port      *serial.Port
+	config_id uint32
 }
 
 func (mts *MTSerial) Init(dev string, baud int) {
-        mts.config_id = rand.Uint32()
+	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
 		Name: dev,
 		Baud: baud,
 	}
-        var err error
+	var err error
 	mts.port, err = serial.OpenPort(mts.conf)
 	if err != nil {
 		fmt.Print("Failed to open serial port: %v", err)
 	} else {
-	    fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
-            radioConfig := &generated.ToRadio{
-                    PayloadVariant: &generated.ToRadio_WantConfigId{
-                            WantConfigId: mts.config_id,
-                    },
-            }
-            fmt.Printf("Sending ToRadio message: %+v\n", radioConfig)
-            mts.Write(radioConfig)
-        }
+		fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
+		radioConfig := &generated.ToRadio{
+			PayloadVariant: &generated.ToRadio_WantConfigId{
+				WantConfigId: mts.config_id,
+			},
+		}
+		fmt.Printf("Sending ToRadio message: %+v\n", radioConfig)
+		mts.Write(radioConfig)
+	}
 }
 
 func (mts *MTSerial) Close() {
-    mts.port.Close()
+	mts.port.Close()
 }
 
 func (mts *MTSerial) Write(pb *generated.ToRadio) {
@@ -82,8 +82,8 @@ func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
 		_, err := mts.port.Read(byteBuf)
 		if err != nil {
 			fmt.Printf("Error reading from serial port: %v\n", err)
-                        time.Sleep(time.Second * 3)
-                        continue
+			time.Sleep(time.Second * 3)
+			continue
 		}
 
 		b := byteBuf[0]
@@ -137,8 +137,8 @@ func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
 				if err != nil {
 					fmt.Println("failed to unmarshal fromRadio: %w", err)
 				} else {
-                                    protoChan <- &fromRadio
-                                }
+					protoChan <- &fromRadio
+				}
 				// Remove the processed message from the buffer.
 				buffer.Reset()
 			}

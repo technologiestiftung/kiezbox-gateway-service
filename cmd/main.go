@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"time"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
-	"kiezbox/internal/meshtastic"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"kiezbox/internal/meshtastic"
+	"log"
+	"time"
 )
 
 func main() {
 	// Buffered channel for handling Protobuf messages
 	protoChan := make(chan *generated.FromRadio, 10)
-        var mts meshtastic.MTSerial
-        mts.Init("/dev/ttyUSB0",115200)
+	var mts meshtastic.MTSerial
+	mts.Init("/dev/ttyUSB0", 115200)
 
 	// Launch a goroutine for serial reading.
 	go mts.Read(protoChan)
@@ -31,10 +31,10 @@ func main() {
 	// Process Protobuf messages in the main goroutine.
 	//TODO: move this into it's own gorouting
 	for FromRadio := range protoChan {
-                message := meshtastic.ExtractKBMessage(FromRadio)
-                if message == nil {
-                    continue
-                }
+		message := meshtastic.ExtractKBMessage(FromRadio)
+		if message == nil {
+			continue
+		}
 		fmt.Println("Handling Protobuf message")
 		tags := make(map[string]string)
 		fields := make(map[string]any)
