@@ -1,3 +1,4 @@
+// Package meshtastic provides utility functions for communication with a meshtastic device over serial
 package meshtastic
 
 import (
@@ -7,6 +8,8 @@ import (
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
 
+// ExtractKBMessage takes a FromRadio protobuf message and extracts a KiezboxMessage if possible
+// It returns the containing KiezboxMessage or nil otherwise
 func ExtractKBMessage(fromRadio *generated.FromRadio) *generated.KiezboxMessage {
 	debugPrintProtobuf(fromRadio)
 	switch v := fromRadio.PayloadVariant.(type) {
@@ -22,7 +25,6 @@ func ExtractKBMessage(fromRadio *generated.FromRadio) *generated.KiezboxMessage 
 				} else {
 					fmt.Println("Extracted KiezboxMessage:")
 					debugPrintProtobuf(&KiezboxMessage)
-					// Send the protobuf message to the processing goroutine.
 					return &KiezboxMessage
 				}
 			default:
@@ -37,6 +39,7 @@ func ExtractKBMessage(fromRadio *generated.FromRadio) *generated.KiezboxMessage 
 	return nil
 }
 
+// debugPrintProtobuf takes a protobuf message and prints it in a pretty way for debugging
 func debugPrintProtobuf(message proto.Message) {
 	// Convert the Protobuf message to text format
 	textData, err := prototext.MarshalOptions{

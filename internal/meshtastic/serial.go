@@ -1,3 +1,4 @@
+// Package meshtastic provides utility functions for communication with a meshtastic device over serial
 package meshtastic
 
 import (
@@ -11,18 +12,24 @@ import (
 	"time"
 )
 
+// Constants used in the meshtastic stream protocol
+// which is documented here > https://meshtastic.org/docs/development/device/client-api/#streaming-version
 const (
 	start1       = 0x94
 	start2       = 0xC3
 	maxProtoSize = 512
 )
 
+// MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
 	conf      *serial.Config
 	port      *serial.Port
 	config_id uint32
 }
 
+// Init initializes the serial device of an MTSerial object
+// and also sends the necessary initial radioConfig protobuf packet
+// to start the communication with the meshtastic serial device
 func (mts *MTSerial) Init(dev string, baud int) {
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
@@ -45,10 +52,13 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	}
 }
 
+// Close terminates the serial connection
 func (mts *MTSerial) Close() {
 	mts.port.Close()
 }
 
+// Write takes a ToRadio protobuf marshalls it and sends it over the serial
+// connection to the meshtastic device. The necessary framing is done here.
 func (mts *MTSerial) Write(pb *generated.ToRadio) {
 	pb_marshalled, err := proto.Marshal(pb)
 	if err != nil {
@@ -73,6 +83,9 @@ func (mts *MTSerial) Write(pb *generated.ToRadio) {
 	}
 }
 
+// Read takes a channel to write FromRadio protobuf messages to as they arrive on the serial interface
+// It parses the framing information and discards any 'non protobuf' messages that may arrive
+// It should probably be started as goroutine, as it never returns and blocks while reading from serial
 func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
