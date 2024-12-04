@@ -2,53 +2,25 @@ package main
 
 import (
 	"fmt"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"kiezbox/internal/config"
+	"kiezbox/internal/db"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"kiezbox/internal/meshtastic"
 	"log"
 	"time"
-
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-
-	config "kiezbox/internal/config"
-	db "kiezbox/internal/db"
-	"kiezbox/internal/github.com/meshtastic/go/generated"
-	marshal "kiezbox/internal/marshal" // TODO: is the alias redundant?
 )
 
 func main() {
-	// --- Mock Kiezbox data, marshalling and unmarshalling ---
-	
-	// Step 1: Create a new KiezboxStatus message
-	statusData := &generated.KiezboxMessage{
-		Update: &generated.KiezboxMessage_Update{
-			Meta: &generated.KiezboxMessage_Meta{
-				BoxId:  1, // Example value
-				DistId: 2, // Example value
-			},
-			UnixTime: time.Now().Unix(), // Current Unix timestamp
-			Core: &generated.KiezboxMessage_Core{
-				Mode: generated.KiezboxMessage_normal, // Required field
-				Router: &generated.KiezboxMessage_Router{
-					Powered: true, // Example value
-				},
-				Values: &generated.KiezboxMessage_CoreValues{}, // Required, but no optional fields set
-			},
-		},
-	}
+	// Buffered channel for handling Protobuf messages
+	protoChan := make(chan *generated.FromRadio, 10)
+	var mts meshtastic.MTSerial
+	mts.Init("/dev/ttyUSB0", 115200)
 
-	// Marshal
-	marshalledData, err := marshal.MarshalKiezboxMessage(statusData)
-	if err != nil {
-		log.Fatalf("Error marshalling data: %v", err)
-	}
+	// Launch a goroutine for serial reading.
+	go mts.Read(protoChan)
 
-	fmt.Printf("Marshalled Data: %x\n", marshalledData)
-
-	// Unmarshal
-	unmarshalledData, err := marshal.UnmarshalKiezboxMessage(marshalledData)
-	if err != nil {
-		log.Fatalf("Error unmarshalling data: %v", err)
-	}
-
-	// --- Write data to the DB
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
 
@@ -56,31 +28,48 @@ func main() {
 	db_client := db.CreateClient(url, token, org, bucket)
 	defer db_client.Close()
 
-	// Prepare the InfluxDB point
-	point := influxdb2.NewPoint(
-		// Measurement
-		"sensor_data",
-		// Tags
-		map[string]string{
-			"box_id":   fmt.Sprintf("%d", unmarshalledData.Update.Meta.BoxId),
-			"district": fmt.Sprintf("%d", unmarshalledData.Update.Meta.DistId),
-		},
-		// Fields
-		map[string]any{
-			"router_powered":     unmarshalledData.Update.Core.Router.Powered,
-			"temperature_out":    float32(unmarshalledData.Update.Core.Values.TempOut) / 1000, // Converting to float32 and °C
-			"temperature_in":     float32(unmarshalledData.Update.Core.Values.TempIn) / 1000,
-		},
-		// Timestamp
-		time.Unix(unmarshalledData.Update.UnixTime, 0),
-	)
+	// Process Protobuf messages in the main goroutine.
+	//TODO: move this into it's own gorouting
+	for FromRadio := range protoChan {
+		message := meshtastic.ExtractKBMessage(FromRadio)
+		if message == nil {
+			continue
+		}
+		fmt.Println("Handling Protobuf message")
+		tags := make(map[string]string)
+		fields := make(map[string]any)
+		meta_reflect := message.Update.Meta.ProtoReflect()
+		meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			// Get the meta tags
+			tags[string(fd.Name())] = v.String()
+			return true // Continue iteration
+		})
+		core_reflect := message.Update.Core.Values.ProtoReflect()
+		core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			// Get the fields
+			fields[string(fd.Name())] = v.Interface()
+			return true // Continue iteration
+		})
+		// Prepare the InfluxDB point
+		point := influxdb2.NewPoint(
+			// Measurement
+			"core_values",
+			// Tags
+			tags,
+			// Fields
+			fields,
+			// Timestamp
+			//time.Unix(message.Update.UnixTime, 0),
+			time.Now(),
+		)
+		fmt.Printf("Addint point: %+v\n", point)
 
-	// Write the point to InfluxDB
-	if err := db_client.WriteData(point); err != nil {
-		log.Fatalf("Error writing data: %v", err)
+		// Write the point to InfluxDB
+		err := db_client.WriteData(point)
+		fmt.Println("Writing data... Err?", err)
+
+		fmt.Println("Data written to InfluxDB successfully")
 	}
-
-	fmt.Println("Data written to InfluxDB successfully")
 
 	// --- Retrieve Data from InfluxDB ---
 	// Define a Flux query to retrieve sensor data
