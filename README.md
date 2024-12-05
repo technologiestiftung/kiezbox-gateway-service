@@ -37,8 +37,16 @@ Run the main fail to test the module.
 go run cmd/main.go
 ```
 
-## Run unittests
+## Unittests
+
+To run the tests.
 
 ```
 go test ./...
+```
+
+To get a visual representation of code coverage in the tests.
+
+```
+go tool cover -html=coverage.out
 ```
