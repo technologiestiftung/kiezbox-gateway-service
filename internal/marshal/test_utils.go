@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"kiezbox/internal/github.com/meshtastic/go/generated"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // Create enerates a basic KiezboxMessage
@@ -11,8 +13,8 @@ func CreateKiezboxMessage() *generated.KiezboxMessage {
 	return &generated.KiezboxMessage{
 		Update: &generated.KiezboxMessage_Update{
 			Meta: &generated.KiezboxMessage_Meta{
-				BoxId:  1,
-				DistId: 2,
+				BoxId:  proto.Uint32(1),
+				DistId: proto.Uint32(2),
 			},
 			UnixTime: time.Now().Unix(),
 			Core: &generated.KiezboxMessage_Core{
