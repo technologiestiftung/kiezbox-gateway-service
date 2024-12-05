@@ -46,8 +46,11 @@ func main() {
 		})
 		core_reflect := message.Update.Core.Values.ProtoReflect()
 		core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-			// Get the fields
-			fields[string(fd.Name())] = v.Interface()
+                        if intVal, ok := v.Interface().(int32); ok {
+                            fields[string(fd.Name())] = float64(intVal) / 1000.0
+                        } else {
+                            fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+                        }
 			return true // Continue iteration
 		})
 		// Prepare the InfluxDB point
