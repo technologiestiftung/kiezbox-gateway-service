@@ -7,7 +7,7 @@ import (
 	influxdb_write "github.com/influxdata/influxdb-client-go/v2/api/write"
 )
 
-// CreateTestPoint returns a pre-defined InfluxDB Point for testing purposes
+// Create a pre-defined InfluxDB Point
 func CreateTestPoint() *influxdb_write.Point {
 	return influxdb.NewPoint(
 		// Measurement
@@ -28,7 +28,7 @@ func CreateTestPoint() *influxdb_write.Point {
 	)
 }
 
-// Helper to create a valid InfluxDB query string
+// Create a valid InfluxDB query string
 func createQuery(bucket string) string {
 	return `
 		from(bucket: "` + bucket + `")

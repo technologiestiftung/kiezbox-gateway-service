@@ -76,24 +76,24 @@ func TestQueryData(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			// Arrange: Mock the QueryAPI behavior
+			// Initialize and set behavior of QueryAPI mock
 			mockQueryAPI := new(MockQueryAPI)
 			query := createQuery("test-bucket")
 			mockQueryAPI.On("Query", mock.Anything, query).Return(testCase.mockReturn, testCase.mockError)
 
-			// Initialize the mocked InfluxDB instance
+			//  Initialize InfluxDB instance mock
 			db := &InfluxDB{
-				Client:   nil,          // Not needed for this test
-				WriteAPI: nil,          // Not needed for this test
-				QueryAPI: mockQueryAPI, // Use the mocked QueryAPI
+				Client:   nil,
+				WriteAPI: nil,
+				QueryAPI: mockQueryAPI,
 				Org:      "test-org",
 				Bucket:   "test-bucket",
 			}
 
-			// Act: Call QueryData
+			// Call QueryData
 			_, err := db.QueryData(query)
 
-			// Assert: Verify results based on the test case
+			// Verify results based on the test case
 			if testCase.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {

@@ -37,7 +37,6 @@ func (m *MockWriteAPI) Flush(ctx context.Context) error {
 
 func TestWriteData(t *testing.T) {
 	// Define test cases
-	// TODO: Check if there are more types of errors to be handled
 	testCases := []struct {
 		name          string
 		mockReturnErr error
@@ -57,27 +56,26 @@ func TestWriteData(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			// Arrange: Mock the WriteAPI behavior
+			// Initialize and set behavior of WriteAPI mock
 			mockWriteAPI := new(MockWriteAPI)
 			mockWriteAPI.On("WritePoint", mock.Anything, mock.Anything).Return(testCase.mockReturnErr)
 
-			// TODO: Maybe move this somewhere else too, as QueryAPITest will also use it
-            // Initialize the mocked InfluxDB instance
+            // Initialize InfluxDB instance mock
             db := &InfluxDB{
-                Client:   nil,               // Not needed for this test
-                WriteAPI: mockWriteAPI,      // Use the mocked WriteAPI
-                QueryAPI: nil,               // Not needed for this test
-                Org:      "test-org",        // Example organization
-                Bucket:   "test-bucket",     // Example bucket
+                Client:   nil,
+                WriteAPI: mockWriteAPI,
+                QueryAPI: nil,
+                Org:      "test-org",
+                Bucket:   "test-bucket",
             }
 
 			// Prepare the InfluxDB point
 			point := CreateTestPoint()
 
-			// Act: Call WriteData
+			// Call WriteData
 			err := db.WriteData(point)
 
-			// Assert: Verify results based on the test case
+			// Verify results based on the test cases
 			if testCase.expectedErr == "" {
 				assert.NoError(t, err) // No error expected
 			} else {
