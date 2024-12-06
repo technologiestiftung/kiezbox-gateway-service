@@ -6,12 +6,6 @@ Initialize the database.
 docker compose up
 ```
 
-Update the protobufs submodule, if you want to generate the 
-
-```
-git submodule update --init
-```
-
 ## Protobuf > pb.go generation
 
 First, update the protobufs submodule.
@@ -46,4 +40,18 @@ go mod tidy
 Run the main fail to test the module.
 ```
 go run cmd/main.go
+```
+
+## Unittests
+
+To run the tests.
+
+```
+go test ./...
+```
+
+To get a visual representation of code coverage in the tests.
+
+```
+go tool cover -html=coverage.out
 ```

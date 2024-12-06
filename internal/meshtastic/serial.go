@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/tarm/serial"
-	"google.golang.org/protobuf/proto"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"math/rand"
 	"time"
+
+	"github.com/tarm/serial"
+	"google.golang.org/protobuf/proto"
 )
 
 // Constants used in the meshtastic stream protocol
@@ -39,7 +40,7 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	var err error
 	mts.port, err = serial.OpenPort(mts.conf)
 	if err != nil {
-		fmt.Print("Failed to open serial port: %v", err)
+		fmt.Printf("Failed to open serial port: %v", err)
 	} else {
 		fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
 		radioConfig := &generated.ToRadio{
