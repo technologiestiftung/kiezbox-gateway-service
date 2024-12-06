@@ -1,6 +1,6 @@
 module kiezbox
 
-go 1.23.3
+go 1.21
 
 require (
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0
