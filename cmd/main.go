@@ -6,7 +6,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
-	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/meshtastic"
 	"log"
 	"time"
@@ -14,12 +13,12 @@ import (
 
 func main() {
 	// Buffered channel for handling Protobuf messages
-	protoChan := make(chan *generated.FromRadio, 10)
 	var mts meshtastic.MTSerial
 	mts.Init("/dev/ttyUSB0", 115200)
 
 	// Launch a goroutine for serial reading.
-	go mts.Read(protoChan)
+	go mts.Writer()
+	go mts.Reader()
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
@@ -30,7 +29,7 @@ func main() {
 
 	// Process Protobuf messages in the main goroutine.
 	//TODO: move this into it's own gorouting
-	for FromRadio := range protoChan {
+	for FromRadio := range mts.FromChan {
 		message := meshtastic.ExtractKBMessage(FromRadio)
 		if message == nil {
 			continue
@@ -46,11 +45,11 @@ func main() {
 		})
 		core_reflect := message.Update.Core.Values.ProtoReflect()
 		core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-                        if intVal, ok := v.Interface().(int32); ok {
-                            fields[string(fd.Name())] = float64(intVal) / 1000.0
-                        } else {
-                            fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-                        }
+			if intVal, ok := v.Interface().(int32); ok {
+				fields[string(fd.Name())] = float64(intVal) / 1000.0
+			} else {
+				fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+			}
 			return true // Continue iteration
 		})
 		// Prepare the InfluxDB point
