@@ -53,6 +53,9 @@ func main() {
 			}
 			return true // Continue iteration
 		})
+		// Add an additional field with the gateway systems arrival time
+		// Currently used for debugging and sanity checking
+		fields["time_arrival"] = time.Now().Format(time.RFC3339)
 		// Prepare the InfluxDB point
 		point := influxdb2.NewPoint(
 			// Measurement
@@ -62,8 +65,7 @@ func main() {
 			// Fields
 			fields,
 			// Timestamp
-			//time.Unix(message.Update.UnixTime, 0),
-			time.Now(),
+			time.Unix(message.Update.UnixTime, 0),
 		)
 		fmt.Printf("Addint point: %+v\n", point)
 
