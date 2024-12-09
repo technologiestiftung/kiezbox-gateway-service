@@ -11,7 +11,7 @@ import (
 // ExtractKBMessage takes a FromRadio protobuf message and extracts a KiezboxMessage if possible
 // It returns the containing KiezboxMessage or nil otherwise
 func ExtractKBMessage(fromRadio *generated.FromRadio) *generated.KiezboxMessage {
-	debugPrintProtobuf(fromRadio)
+	// debugPrintProtobuf(fromRadio)
 	switch v := fromRadio.PayloadVariant.(type) {
 	case *generated.FromRadio_Packet:
 		switch v := v.Packet.PayloadVariant.(type) {
@@ -21,9 +21,9 @@ func ExtractKBMessage(fromRadio *generated.FromRadio) *generated.KiezboxMessage 
 				var KiezboxMessage generated.KiezboxMessage
 				err := proto.Unmarshal(v.Decoded.Payload, &KiezboxMessage)
 				if err != nil {
-					fmt.Println("failed to unmarshal KiezboxMessage: %w", err)
+					fmt.Println("Failed to unmarshal KiezboxMessage: %w", err)
 				} else {
-					fmt.Println("Extracted KiezboxMessage:")
+					fmt.Println("Sucessfully extracted KiezboxMessage:")
 					debugPrintProtobuf(&KiezboxMessage)
 					return &KiezboxMessage
 				}
@@ -31,10 +31,10 @@ func ExtractKBMessage(fromRadio *generated.FromRadio) *generated.KiezboxMessage 
 				fmt.Println("Payload variant not a Kiezbox Message")
 			}
 		default:
-			fmt.Println("Payload variant is encrypted")
+			// fmt.Println("Payload variant is encrypted")
 		}
 	default:
-		fmt.Println("Payload variant is not 'packet'")
+		// fmt.Println("Payload variant is not 'packet'")
 	}
 	return nil
 }
