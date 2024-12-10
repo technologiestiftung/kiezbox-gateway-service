@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/tarm/serial"
@@ -26,12 +27,21 @@ type MTSerial struct {
 	conf      *serial.Config
 	port      *serial.Port
 	config_id uint32
+	ToChan    chan *generated.ToRadio
+	FromChan  chan *generated.FromRadio
+	KBChan    chan *generated.KiezboxMessage
+	MyInfo    *generated.MyNodeInfo
+	WaitInfo  sync.WaitGroup
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
 func (mts *MTSerial) Init(dev string, baud int) {
+	mts.FromChan = make(chan *generated.FromRadio, 10)
+	mts.ToChan = make(chan *generated.ToRadio, 10)
+	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
+	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
 		Name: dev,
@@ -53,41 +63,95 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	}
 }
 
+func (mts *MTSerial) Heartbeat(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for t := range ticker.C {
+		Heartbeat := &generated.ToRadio{
+			PayloadVariant: &generated.ToRadio_Heartbeat{},
+		}
+		fmt.Printf("Sending Heartbeat at %s\n", t)
+		mts.Write(Heartbeat)
+	}
+}
+
+func (mts *MTSerial) Settime(time int64) {
+	mts.WaitInfo.Wait()
+	kiezboxMessage := &generated.KiezboxMessage{
+		Control: &generated.KiezboxMessage_Control{
+			Set: &generated.KiezboxMessage_Control_UnixTime{
+				UnixTime: time,
+			},
+		},
+	}
+	kiezboxData, err := proto.Marshal(kiezboxMessage)
+	if err != nil {
+		fmt.Printf("Failed to marshal KiezboxMessage: %v", err)
+	}
+	dataMessage := &generated.Data{
+		Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
+		Payload: kiezboxData,
+	}
+	meshPacket := &generated.MeshPacket{
+		From:    0, //TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
+		Channel: 2, //TODO: get Channel dynamically
+		PayloadVariant: &generated.MeshPacket_Decoded{
+			Decoded: dataMessage,
+		},
+	}
+	toRadio := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_Packet{
+			Packet: meshPacket,
+		},
+	}
+	fmt.Printf("Setting time to unix time %d\n", time)
+	mts.Write(toRadio)
+}
+
 // Close terminates the serial connection
 func (mts *MTSerial) Close() {
 	mts.port.Close()
 }
 
-// Write takes a ToRadio protobuf marshalls it and sends it over the serial
+// Write takes a ToRadio protobuf and writes it to the ToChan to be processed by the Writer
+func (mts *MTSerial) Write(toradio *generated.ToRadio) {
+	mts.ToChan <- toradio
+}
+
+// Writer takes a ToRadio protobuf from to ToChan, marshalls it and sends it over the serial
 // connection to the meshtastic device. The necessary framing is done here.
-func (mts *MTSerial) Write(pb *generated.ToRadio) {
-	pb_marshalled, err := proto.Marshal(pb)
-	if err != nil {
-		fmt.Println("failed to marshal ToRadio: %w", err)
-	}
-	hex := fmt.Sprintf("%x", pb_marshalled)
-	fmt.Printf("ToRadio Marshalled: 0x%s\n", hex)
-	configLen := len(pb_marshalled)
-	configHeader := []byte{
-		start1,
-		start2,
-		byte((configLen >> 8) & 0xFF),
-		byte(configLen & 0xFF),
-	}
-	packet := append(configHeader, pb_marshalled...)
-	// Debug output
-	fmt.Printf("Sending packet (Hex): %x\n", packet)
-	// Write the packet to the serial port
-	_, err = mts.port.Write(packet)
-	if err != nil {
-		fmt.Println("failed to write to serial port: %w", err)
+func (mts *MTSerial) Writer() {
+	for ToRadio := range mts.ToChan {
+		fmt.Printf("Sending Protobuf to device: %+v\n", ToRadio)
+		pb_marshalled, err := proto.Marshal(ToRadio)
+		if err != nil {
+			fmt.Println("failed to marshal ToRadio: %w", err)
+		}
+		hex := fmt.Sprintf("%x", pb_marshalled)
+		fmt.Printf("ToRadio Marshalled: 0x%s\n", hex)
+		configLen := len(pb_marshalled)
+		configHeader := []byte{
+			start1,
+			start2,
+			byte((configLen >> 8) & 0xFF),
+			byte(configLen & 0xFF),
+		}
+		packet := append(configHeader, pb_marshalled...)
+		// Debug output
+		fmt.Printf("Sending packet (Hex): %x\n", packet)
+		// Write the packet to the serial port
+		_, err = mts.port.Write(packet)
+		if err != nil {
+			fmt.Println("failed to write to serial port: %w", err)
+		}
 	}
 }
 
-// Read takes a channel to write FromRadio protobuf messages to as they arrive on the serial interface
+// Reader takes a channel to write FromRadio protobuf messages to as they arrive on the serial interface
 // It parses the framing information and discards any 'non protobuf' messages that may arrive
 // It should probably be started as goroutine, as it never returns and blocks while reading from serial
-func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
+func (mts *MTSerial) Reader() {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
 	for {
@@ -151,7 +215,7 @@ func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
 				if err != nil {
 					fmt.Println("failed to unmarshal fromRadio: %w", err)
 				} else {
-					protoChan <- &fromRadio
+					mts.FromChan <- &fromRadio
 				}
 				// Remove the processed message from the buffer.
 				buffer.Reset()
@@ -159,7 +223,3 @@ func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
 		}
 	}
 }
-
-// TODO: debug `DEBUG (ASCII): INFO  | ??:??:?? 6439 [SerialConsole] Lost phone connection`
-// Defaulting to the formerly removed phone_timeout_secs value of 15 minutes
-// #define SERIAL_CONNECTION_TIMEOUT (15 * 60) * 1000UL
