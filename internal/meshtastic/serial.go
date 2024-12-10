@@ -26,12 +26,16 @@ type MTSerial struct {
 	conf      *serial.Config
 	port      *serial.Port
 	config_id uint32
+	ToChan    chan *generated.ToRadio
+	FromChan  chan *generated.FromRadio
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
 func (mts *MTSerial) Init(dev string, baud int) {
+	mts.FromChan = make(chan *generated.FromRadio, 10)
+	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
 		Name: dev,
@@ -58,36 +62,43 @@ func (mts *MTSerial) Close() {
 	mts.port.Close()
 }
 
-// Write takes a ToRadio protobuf marshalls it and sends it over the serial
+// Write takes a ToRadio protobuf and writes it to the ToChan to be processed by the Writer
+func (mts *MTSerial) Write(toradio *generated.ToRadio) {
+	mts.ToChan <- toradio
+}
+
+// Writer takes a ToRadio protobuf from to ToChan, marshalls it and sends it over the serial
 // connection to the meshtastic device. The necessary framing is done here.
-func (mts *MTSerial) Write(pb *generated.ToRadio) {
-	pb_marshalled, err := proto.Marshal(pb)
-	if err != nil {
-		fmt.Println("failed to marshal ToRadio: %w", err)
-	}
-	hex := fmt.Sprintf("%x", pb_marshalled)
-	fmt.Printf("ToRadio Marshalled: 0x%s\n", hex)
-	configLen := len(pb_marshalled)
-	configHeader := []byte{
-		start1,
-		start2,
-		byte((configLen >> 8) & 0xFF),
-		byte(configLen & 0xFF),
-	}
-	packet := append(configHeader, pb_marshalled...)
-	// Debug output
-	fmt.Printf("Sending packet (Hex): %x\n", packet)
-	// Write the packet to the serial port
-	_, err = mts.port.Write(packet)
-	if err != nil {
-		fmt.Println("failed to write to serial port: %w", err)
+func (mts *MTSerial) Writer() {
+	for ToRadio := range mts.ToChan {
+		pb_marshalled, err := proto.Marshal(ToRadio)
+		if err != nil {
+			fmt.Println("failed to marshal ToRadio: %w", err)
+		}
+		hex := fmt.Sprintf("%x", pb_marshalled)
+		fmt.Printf("ToRadio Marshalled: 0x%s\n", hex)
+		configLen := len(pb_marshalled)
+		configHeader := []byte{
+			start1,
+			start2,
+			byte((configLen >> 8) & 0xFF),
+			byte(configLen & 0xFF),
+		}
+		packet := append(configHeader, pb_marshalled...)
+		// Debug output
+		fmt.Printf("Sending packet (Hex): %x\n", packet)
+		// Write the packet to the serial port
+		_, err = mts.port.Write(packet)
+		if err != nil {
+			fmt.Println("failed to write to serial port: %w", err)
+		}
 	}
 }
 
-// Read takes a channel to write FromRadio protobuf messages to as they arrive on the serial interface
+// Reader takes a channel to write FromRadio protobuf messages to as they arrive on the serial interface
 // It parses the framing information and discards any 'non protobuf' messages that may arrive
 // It should probably be started as goroutine, as it never returns and blocks while reading from serial
-func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
+func (mts *MTSerial) Reader() {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
 	for {
@@ -151,7 +162,7 @@ func (mts *MTSerial) Read(protoChan chan<- *generated.FromRadio) {
 				if err != nil {
 					fmt.Println("failed to unmarshal fromRadio: %w", err)
 				} else {
-					protoChan <- &fromRadio
+					mts.FromChan <- &fromRadio
 				}
 				// Remove the processed message from the buffer.
 				buffer.Reset()
