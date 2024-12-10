@@ -22,7 +22,7 @@ func TestMarshalKiezboxMessageValid(t *testing.T) {
 		},
 		{
 			name:          "Empty Message",
-			kiezboxMessage: &generated.KiezboxMessage{}, // Invalid message to trigger an error
+			kiezboxMessage: nil, // Invalid message to trigger an error
 			expectError:   true,
 		},
 	}

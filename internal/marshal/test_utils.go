@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Create enerates a basic KiezboxMessage
+// Create a basic KiezboxMessage
 func CreateKiezboxMessage() *generated.KiezboxMessage {
 	return &generated.KiezboxMessage{
 		Update: &generated.KiezboxMessage_Update{

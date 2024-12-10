@@ -10,7 +10,7 @@ import (
 
 // Marshals KiexboxStatus message into a byte slice.
 func MarshalKiezboxMessage(data *generated.KiezboxMessage) ([]byte, error) {
-	if data == nil || data.Update == nil || data.Update.Meta == nil {
+	if data == nil {
         return nil, fmt.Errorf("empty or invalid KiezboxMessage")
     }
 	marshalledData, err := proto.Marshal(data)
