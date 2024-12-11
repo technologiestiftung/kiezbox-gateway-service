@@ -28,7 +28,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Buffered channel for handling Protobuf messages
+	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
 	mts.Init("/dev/ttyUSB0", 115200)
 
@@ -36,7 +36,7 @@ func main() {
 	go mts.Writer()
 	go mts.Heartbeat(30 * time.Second)
 	go mts.Reader()
-	go mts.MessageHanlder()
+	go mts.MessageHandler()
 	if *flag_settime {
 		// We wait for the not info to set the time
 		go mts.Settime(time.Now().Unix())

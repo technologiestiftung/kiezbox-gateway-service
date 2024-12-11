@@ -63,6 +63,7 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	}
 }
 
+// Heartbeat sends a periodic heartbeat message to the meshtastic device to keep the serial connection alive
 func (mts *MTSerial) Heartbeat(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -75,6 +76,8 @@ func (mts *MTSerial) Heartbeat(interval time.Duration) {
 	}
 }
 
+// Settime sends a Kiezbox control message to the meshtastic device containing the current system time
+// The meshtastic device uses it to update its own RTC to the new value
 func (mts *MTSerial) Settime(time int64) {
 	mts.WaitInfo.Wait()
 	kiezboxMessage := &generated.KiezboxMessage{

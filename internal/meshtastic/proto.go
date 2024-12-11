@@ -10,7 +10,7 @@ import (
 
 // ExtractKBMessage takes a FromRadio protobuf message and extracts a KiezboxMessage if possible
 // It returns the containing KiezboxMessage or nil otherwise
-func (mts *MTSerial) MessageHanlder() {
+func (mts *MTSerial) MessageHandler() {
 	for fromRadio := range mts.FromChan {
 		// debugPrintProtobuf(fromRadio)
 		switch v := fromRadio.PayloadVariant.(type) {
