@@ -57,6 +57,18 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	}
 }
 
+func (mts *MTSerial) Heartbeat(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for t := range ticker.C {
+		Heartbeat := &generated.ToRadio{
+			PayloadVariant: &generated.ToRadio_Heartbeat{},
+		}
+		fmt.Printf("Sending Heartbeat at %s: %+v\n", t, Heartbeat)
+		mts.Write(Heartbeat)
+	}
+}
+
 // Close terminates the serial connection
 func (mts *MTSerial) Close() {
 	mts.port.Close()

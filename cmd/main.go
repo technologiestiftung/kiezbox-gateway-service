@@ -18,6 +18,7 @@ func main() {
 
 	// Launch a goroutine for serial reading.
 	go mts.Writer()
+	go mts.Heartbeat(30 * time.Second)
 	go mts.Reader()
 
 	// Load InfluxDB configuration
