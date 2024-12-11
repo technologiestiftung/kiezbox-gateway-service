@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/tarm/serial"
@@ -28,6 +29,9 @@ type MTSerial struct {
 	config_id uint32
 	ToChan    chan *generated.ToRadio
 	FromChan  chan *generated.FromRadio
+	KBChan    chan *generated.KiezboxMessage
+	MyInfo    *generated.MyNodeInfo
+	WaitInfo  sync.WaitGroup
 }
 
 // Init initializes the serial device of an MTSerial object
@@ -36,6 +40,8 @@ type MTSerial struct {
 func (mts *MTSerial) Init(dev string, baud int) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
+	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
+	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
 		Name: dev,
@@ -57,6 +63,7 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	}
 }
 
+// Heartbeat sends a periodic heartbeat message to the meshtastic device to keep the serial connection alive
 func (mts *MTSerial) Heartbeat(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -64,9 +71,45 @@ func (mts *MTSerial) Heartbeat(interval time.Duration) {
 		Heartbeat := &generated.ToRadio{
 			PayloadVariant: &generated.ToRadio_Heartbeat{},
 		}
-		fmt.Printf("Sending Heartbeat at %s: %+v\n", t, Heartbeat)
+		fmt.Printf("Sending Heartbeat at %s\n", t)
 		mts.Write(Heartbeat)
 	}
+}
+
+// Settime sends a Kiezbox control message to the meshtastic device containing the current system time
+// The meshtastic device uses it to update its own RTC to the new value
+func (mts *MTSerial) Settime(time int64) {
+	mts.WaitInfo.Wait()
+	kiezboxMessage := &generated.KiezboxMessage{
+		Control: &generated.KiezboxMessage_Control{
+			Set: &generated.KiezboxMessage_Control_UnixTime{
+				UnixTime: time,
+			},
+		},
+	}
+	kiezboxData, err := proto.Marshal(kiezboxMessage)
+	if err != nil {
+		fmt.Printf("Failed to marshal KiezboxMessage: %v", err)
+	}
+	dataMessage := &generated.Data{
+		Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
+		Payload: kiezboxData,
+	}
+	meshPacket := &generated.MeshPacket{
+		From:    0, //TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
+		Channel: 2, //TODO: get Channel dynamically
+		PayloadVariant: &generated.MeshPacket_Decoded{
+			Decoded: dataMessage,
+		},
+	}
+	toRadio := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_Packet{
+			Packet: meshPacket,
+		},
+	}
+	fmt.Printf("Setting time to unix time %d\n", time)
+	mts.Write(toRadio)
 }
 
 // Close terminates the serial connection
@@ -83,6 +126,7 @@ func (mts *MTSerial) Write(toradio *generated.ToRadio) {
 // connection to the meshtastic device. The necessary framing is done here.
 func (mts *MTSerial) Writer() {
 	for ToRadio := range mts.ToChan {
+		fmt.Printf("Sending Protobuf to device: %+v\n", ToRadio)
 		pb_marshalled, err := proto.Marshal(ToRadio)
 		if err != nil {
 			fmt.Println("failed to marshal ToRadio: %w", err)
@@ -182,7 +226,3 @@ func (mts *MTSerial) Reader() {
 		}
 	}
 }
-
-// TODO: debug `DEBUG (ASCII): INFO  | ??:??:?? 6439 [SerialConsole] Lost phone connection`
-// Defaulting to the formerly removed phone_timeout_secs value of 15 minutes
-// #define SERIAL_CONNECTION_TIMEOUT (15 * 60) * 1000UL
