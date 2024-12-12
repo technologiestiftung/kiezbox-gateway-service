@@ -50,74 +50,10 @@ func main() {
 	db_client := db.CreateClient(url, token, org, bucket)
 	defer db_client.Close()
 
-	// Process Protobuf messages in the main goroutine.
-	//TODO: move this into it's own gorouting
+
+	// Process incoming KiexBox messages in its own goroutine
 	if *flag_daemon {
-		for message := range mts.KBChan {
-			if message == nil {
-				continue
-			}
-			fmt.Println("Handling Protobuf message")
-			tags := make(map[string]string)
-			fields := make(map[string]any)
-			var measurement string
-
-			// Iterate over the meta data and add them to the tags
-			meta_reflect := message.Update.Meta.ProtoReflect()
-			meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-				// Get the meta tags
-				tags[string(fd.Name())] = v.String()
-				return true // Continue iteration
-			})
-
-			// Iterate over the values and add them to the fields
-			if message.Update.Core != nil {
-				measurement = "core_values"
-				core_reflect := message.Update.Core.Values.ProtoReflect()
-				core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
-			} else if message.Update.Sensor != nil {
-				measurement = "sensor_values"
-				sensor_reflect := message.Update.Sensor.Values.ProtoReflect()
-				sensor_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
-			}
-
-			// Add an additional field with the gateway systems arrival time
-			// Currently used for debugging and sanity checking
-			fields["time_arrival"] = time.Now().Format(time.RFC3339)
-
-			// Prepare the InfluxDB point
-			point := influxdb2.NewPoint(
-				// Measurement
-				measurement,
-				// Tags
-				tags,
-				// Fields
-				fields,
-				// Timestamp
-				time.Unix(message.Update.UnixTime, 0),
-			)
-			fmt.Printf("Addint point: %+v\n", point)
-
-			// Write the point to InfluxDB
-			err := db_client.WriteData(point)
-			fmt.Println("Writing data... Err?", err)
-
-			fmt.Println("Data written to InfluxDB successfully")
-		}
+		go mts.DBWriter(db_client)
 	} else {
 		mts.WaitInfo.Wait()
 	}
