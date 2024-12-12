@@ -5,13 +5,17 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"math/rand"
 	"sync"
 	"time"
 
+	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"kiezbox/internal/db"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
 
 // Constants used in the meshtastic stream protocol

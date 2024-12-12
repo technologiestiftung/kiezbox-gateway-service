@@ -9,9 +9,6 @@ import (
 	"log"
 	"os"
 	"time"
-
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 func main() {
