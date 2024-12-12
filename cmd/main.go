@@ -16,7 +16,7 @@ import (
 
 func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
-	flag_daemon := flag.Bool("daemon", false, "Tells the serice to run as (background) daemon")
+	flag_daemon := flag.Bool("daemon", false, "Tells the service to run as (background) daemon")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
 	flag.Parse()
 	// Print help and exit
@@ -60,6 +60,7 @@ func main() {
 
 	// --- Retrieve Data from InfluxDB ---
 	// Flux query to get latest measurements
+	// This is just for testing purposes, but actually not a responsibility of the gateway service
 	query := fmt.Sprintf(`
 		from(bucket: "%s")
 			|> range(start: -15m)  // Retrieve data from the last 1 hour
