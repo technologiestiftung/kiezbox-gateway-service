@@ -50,7 +50,7 @@ func (mts *MTSerial) Init(dev string, baud int) {
 	var err error
 	mts.port, err = serial.OpenPort(mts.conf)
 	if err != nil {
-		fmt.Printf("Failed to open serial port: %v", err)
+		fmt.Printf("Failed to open serial port: %v\n", err)
 	} else {
 		fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
 		radioConfig := &generated.ToRadio{
@@ -125,6 +125,10 @@ func (mts *MTSerial) Write(toradio *generated.ToRadio) {
 // Writer takes a ToRadio protobuf from to ToChan, marshalls it and sends it over the serial
 // connection to the meshtastic device. The necessary framing is done here.
 func (mts *MTSerial) Writer() {
+	if mts.port == nil {
+		fmt.Println("Serial port not initialized")
+		return
+	}
 	for ToRadio := range mts.ToChan {
 		fmt.Printf("Sending Protobuf to device: %+v\n", ToRadio)
 		pb_marshalled, err := proto.Marshal(ToRadio)
@@ -157,6 +161,10 @@ func (mts *MTSerial) Writer() {
 func (mts *MTSerial) Reader() {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
+	if mts.port == nil {
+		fmt.Println("Serial port not initialized")
+		return
+	}
 	for {
 		// Read one byte at a time from the serial port.
 		byteBuf := make([]byte, 1)
