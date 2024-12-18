@@ -1,15 +1,56 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
-	"log"
 	"os"
+	"sync"
 	"time"
+
+	"github.com/tarm/serial"
 )
+
+// Using an interface as an intermediate layer instead of calling the meshtastic functions directly
+// allows for dependency injection, essential for unittesting.
+type MeshtasticDevice interface {
+    Writer(ctx context.Context, wg *sync.WaitGroup)
+    Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
+	Reader(ctx context.Context, wg *sync.WaitGroup)
+	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
+	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
+	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
+}
+
+
+// RunGoroutines orchestrates the goroutines that run the service.
+func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, setTime bool, daemon bool, db_client *db.InfluxDB) {
+	// Launch goroutines
+	wg.Add(1)
+	go device.Writer(ctx, wg)
+	wg.Add(1)
+	go device.Heartbeat(ctx, wg, 30 * time.Second)
+	wg.Add(1)
+	go device.Reader(ctx, wg)
+	wg.Add(1)
+	go device.MessageHandler(ctx, wg)
+	if setTime {
+		// We wait for the not info to set the time
+		wg.Add(1)
+		go device.Settime(ctx, wg, time.Now().Unix())
+	}
+
+	// Process incoming KiexBox messages in its own goroutine
+	if daemon {
+		wg.Add(1)
+		go device.DBWriter(ctx, wg, db_client)
+	// } else {
+	// 	mts.WaitInfo.Wait()
+	}
+}
 
 func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
@@ -28,17 +69,11 @@ func main() {
 
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
-	mts.Init("/dev/ttyUSB0", 115200)
 
-	// Launch a goroutine for serial reading.
-	go mts.Writer()
-	go mts.Heartbeat(30 * time.Second)
-	go mts.Reader()
-	go mts.MessageHandler()
-	if *flag_settime {
-		// We wait for the not info to set the time
-		go mts.Settime(time.Now().Unix())
-	}
+	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
+		return serial.OpenPort(conf)
+}
+	mts.Init("/dev/ttyUSB0", 115200, portFactory)
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
@@ -47,42 +82,16 @@ func main() {
 	db_client := db.CreateClient(url, token, org, bucket)
 	defer db_client.Close()
 
+	// Create a context with cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Process incoming KiexBox messages in its own goroutine
-	if *flag_daemon {
-		go mts.DBWriter(db_client)
-	} else {
-		mts.WaitInfo.Wait()
-	}
+	// Create a WaitGroup to wait for the goroutines
+	var wg sync.WaitGroup
 
-	// --- Retrieve Data from InfluxDB ---
-	// Flux query to get latest measurements
-	// This is just for testing purposes, but actually not a responsibility of the gateway service
-	query := fmt.Sprintf(`
-		from(bucket: "%s")
-			|> range(start: -15m)  // Retrieve data from the last 1 hour
-			|> filter(fn: (r) => r["_measurement"] == "core_values")
-	`, bucket)
+	// Run the goroutines
+	RunGoroutines(ctx, &wg, &mts, *flag_settime, *flag_daemon, db_client)
 
-	// Execute the query
-	result, err := db_client.QueryData(query)
-	if err != nil {
-		log.Fatalf("Error querying data: %v", err)
-	}
-
-	// Iterate over the query result and print the data
-	for result.Next() {
-		fmt.Printf("Time: %v, Measurement: %v, Field: %v, Value: %v\n",
-			result.Record().Time(),
-			result.Record().Measurement(),
-			result.Record().Field(),
-			result.Record().Value())
-	}
-
-	// Check for errors in the query results
-	if result.Err() != nil {
-		log.Fatalf("Query failed: %v", result.Err())
-	}
-
-	fmt.Println("Data retrieved from InfluxDB successfully")
+    // Wait for all goroutines to finish
+    wg.Wait()
 }
