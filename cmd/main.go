@@ -57,6 +57,7 @@ func main() {
 			if message == nil {
 				continue
 			}
+			// --- TODO: Move code block from this point to the db package ---
 			fmt.Println("Handling Protobuf message")
 			tags := make(map[string]string)
 			fields := make(map[string]any)
@@ -111,6 +112,7 @@ func main() {
 				time.Unix(message.Update.UnixTime, 0),
 			)
 			fmt.Printf("Addint point: %+v\n", point)
+			// --- TODO: Move code block up to this point to the db package ---
 
 			// Write the point to InfluxDB
 			err := db_client.WriteData(point)
