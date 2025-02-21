@@ -18,6 +18,8 @@ func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
 	flag_daemon := flag.Bool("daemon", false, "Tells the serice to run as (background) daemon")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
+	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
+	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
@@ -31,7 +33,7 @@ func main() {
 
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
-	mts.Init("/dev/ttyUSB0", 115200)
+	mts.Init(*flag_serial_device, *flag_serial_baud)
 
 	// Launch a goroutine for serial reading.
 	go mts.Writer()

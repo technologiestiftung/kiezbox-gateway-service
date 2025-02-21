@@ -39,6 +39,12 @@ func (mts *MTSerial) MessageHandler() {
 				mts.MyInfo = v.MyInfo
 				mts.WaitInfo.Done()
 			}
+		//Device rebooted, so we ask for config again to initialize communication
+		case *generated.FromRadio_Rebooted:
+			{
+				mts.WaitInfo.Add(1)
+				mts.WantConfig()
+			}
 		default:
 			// fmt.Println("Payload variant is not 'packet'")
 		}
