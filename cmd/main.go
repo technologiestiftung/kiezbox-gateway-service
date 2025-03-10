@@ -56,6 +56,8 @@ func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
 	flag_daemon := flag.Bool("daemon", false, "Tells the service to run as (background) daemon")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
+	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
+	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
@@ -70,10 +72,11 @@ func main() {
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
 
+	// TODO: portFactory is also defined in serial.go, this should be taken care of eventally
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
-}
-	mts.Init("/dev/ttyUSB0", 115200, portFactory)
+	}
+	mts.Init(*flag_serial_device, *flag_serial_baud, portFactory)	
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()

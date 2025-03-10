@@ -23,8 +23,8 @@ import (
 // Constants used in the meshtastic stream protocol
 // which is documented here > https://meshtastic.org/docs/development/device/client-api/#streaming-version
 const (
-	start1       = 0x94
-	start2       = 0xC3
+	start1	     = 0x94
+	start2	     = 0xC3
 	maxProtoSize = 512
 )
 
@@ -33,22 +33,25 @@ type SerialPort interface {
 	io.ReadWriteCloser
 }
 
+type portFactory func(*serial.Config) (SerialPort, error)
+
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
 	conf      *serial.Config
 	port      SerialPort
 	config_id uint32
-	ToChan    chan *generated.ToRadio
+	ToChan	  chan *generated.ToRadio
 	FromChan  chan *generated.FromRadio
-	KBChan    chan *generated.KiezboxMessage
-	MyInfo    *generated.MyNodeInfo
+	KBChan	  chan *generated.KiezboxMessage
+	MyInfo	  *generated.MyNodeInfo
 	WaitInfo  sync.WaitGroup
+	portFactory portFactory
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, portFactory func(*serial.Config) (SerialPort, error)) {
+func (mts *MTSerial) Init(dev string, baud int, portFactory portFactory) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -58,19 +61,48 @@ func (mts *MTSerial) Init(dev string, baud int, portFactory func(*serial.Config)
 		Name: dev,
 		Baud: baud,
 	}
-	var err error
-	mts.port, err = portFactory(mts.conf)
+	mts.portFactory = portFactory
+	for {
+		var err = mts.Open()
+		if err == nil {
+			break
+		} else {
+		    fmt.Println("Waiting for serial Port to become available...")
+		    time.Sleep(time.Second * 3)
+		}
+	}
+}
+
+// Opens the serial port and sends the necessary initial radioConfig protobuf packet
+// to start the communication with the meshtastic serial device
+func (mts *MTSerial) Open() (err error) {
+	mts.port, err = mts.portFactory(mts.conf)
 	if err != nil {
 		fmt.Printf("Failed to open serial port: %v\n", err)
-	} else {
-		fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
-		radioConfig := &generated.ToRadio{
-			PayloadVariant: &generated.ToRadio_WantConfigId{
-				WantConfigId: mts.config_id,
-			},
-		}
-		fmt.Printf("Sending ToRadio message: %+v\n", radioConfig)
-		mts.Write(radioConfig)
+		return err;
+	}
+	mts.WantConfig()
+	return nil;
+}
+
+func (mts *MTSerial) WantConfig() {
+	fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
+	radioConfig := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_WantConfigId{
+			WantConfigId: mts.config_id,
+		},
+	}
+	fmt.Printf("Sending ToRadio message: %+v\n", radioConfig)
+	mts.Write(radioConfig)
+}
+
+// Closes the serial connection and blocks WaitInfo again
+func (mts *MTSerial) Close() {
+	mts.WaitInfo.Add(1)
+	var err error
+	err = mts.port.Close()
+	if err != nil {
+		fmt.Printf("Failed to close serial port: %v", err)
 	}
 }
 
@@ -127,8 +159,8 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 
 	// Create the MeshPacket
 	meshPacket := &generated.MeshPacket{
-		From:    0, //TODO: what should be sender id ?
-		To:      mts.MyInfo.MyNodeNum,
+		From:	 0, //TODO: what should be sender id ?
+		To:	 mts.MyInfo.MyNodeNum,
 		Channel: 2, //TODO: get Channel dynamically
 		PayloadVariant: &generated.MeshPacket_Decoded{
 			Decoded: dataMessage,
@@ -155,12 +187,6 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
     }
 
 	return
-}
-
-// Close terminates the serial connection
-func (mts *MTSerial) Close() error {
-	mts.port.Close()
-	return nil
 }
 
 // Write takes a ToRadio protobuf and writes it to the ToChan to be processed by the Writer
@@ -208,9 +234,13 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 			// Debug output
 			fmt.Printf("Sending packet (Hex): %x\n", packet)
 			// Write the packet to the serial port
-			_, err = mts.port.Write(packet)
-			if err != nil {
-				fmt.Println("failed to write to serial port: %w", err)
+			if mts.port != nil {
+				_, err = mts.port.Write(packet)
+				if err != nil {
+					fmt.Println("failed to write to serial port: %w", err)
+				}
+			} else {
+				fmt.Println("failed to write data to serial, as port is not available")
 			}
 		}
 	}
@@ -242,7 +272,15 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 			_, err := mts.port.Read(byteBuf)
 			if err != nil {
 				fmt.Printf("Error reading from serial port: %v\n", err)
-				time.Sleep(time.Second * 3)
+				mts.Close()
+				for {
+					fmt.Println("Waiting for device to reconnect...")
+					var err = mts.Open()
+					if err == nil {
+						break
+					}
+					time.Sleep(time.Second * 3)
+				}	
 				continue
 			}
 
