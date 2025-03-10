@@ -52,7 +52,7 @@ func (mts *MTSerial) Init(dev string, baud int, portFactory func(*serial.Config)
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
-	mts.WaitInfo.Add(1) // TODO: Why do we increment the WaitGroup here?
+	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
 		Name: dev,
@@ -100,7 +100,7 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 // Settime sends a Kiezbox control message to the meshtastic device containing the current system time
 // The meshtastic device uses it to update its own RTC to the new value
 func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64) {
-	// mts.WaitInfo.Wait() // TODO: Why is this here?
+	mts.WaitInfo.Wait()
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
