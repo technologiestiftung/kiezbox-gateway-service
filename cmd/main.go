@@ -1,22 +1,60 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
-	"log"
 	"os"
+	"sync"
 	"time"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"github.com/tarm/serial"
 )
+
+// Using an interface as an intermediate layer instead of calling the meshtastic functions directly
+// allows for dependency injection, essential for unittesting.
+type MeshtasticDevice interface {
+    Writer(ctx context.Context, wg *sync.WaitGroup)
+    Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
+	Reader(ctx context.Context, wg *sync.WaitGroup)
+	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
+	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
+	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
+}
+
+
+// RunGoroutines orchestrates the goroutines that run the service.
+func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, setTime bool, daemon bool, db_client *db.InfluxDB) {
+	// Launch goroutines
+	wg.Add(1)
+	go device.Writer(ctx, wg)
+	wg.Add(1)
+	go device.Heartbeat(ctx, wg, 30 * time.Second)
+	wg.Add(1)
+	go device.Reader(ctx, wg)
+	wg.Add(1)
+	go device.MessageHandler(ctx, wg)
+	if setTime {
+		// We wait for the not info to set the time
+		wg.Add(1)
+		go device.Settime(ctx, wg, time.Now().Unix())
+	}
+
+	// Process incoming KiexBox messages in its own goroutine
+	if daemon {
+		wg.Add(1)
+		go device.DBWriter(ctx, wg, db_client)
+	// } else {
+	// 	mts.WaitInfo.Wait()
+	}
+}
 
 func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
-	flag_daemon := flag.Bool("daemon", false, "Tells the serice to run as (background) daemon")
+	flag_daemon := flag.Bool("daemon", false, "Tells the service to run as (background) daemon")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
@@ -33,17 +71,12 @@ func main() {
 
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
-	mts.Init(*flag_serial_device, *flag_serial_baud)
 
-	// Launch a goroutine for serial reading.
-	go mts.Writer()
-	go mts.Heartbeat(30 * time.Second)
-	go mts.Reader()
-	go mts.MessageHandler()
-	if *flag_settime {
-		// We wait for the not info to set the time
-		go mts.Settime(time.Now().Unix())
+	// TODO: portFactory is also defined in serial.go, this should be taken care of eventally
+	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
+		return serial.OpenPort(conf)
 	}
+	mts.Init(*flag_serial_device, *flag_serial_baud, portFactory)	
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
@@ -52,105 +85,16 @@ func main() {
 	db_client := db.CreateClient(url, token, org, bucket)
 	defer db_client.Close()
 
-	// Process Protobuf messages in the main goroutine.
-	//TODO: move this into it's own gorouting
-	if *flag_daemon {
-		for message := range mts.KBChan {
-			if message == nil {
-				continue
-			}
-			fmt.Println("Handling Protobuf message")
-			tags := make(map[string]string)
-			fields := make(map[string]any)
-			var measurement string
+	// Create a context with cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-			// Iterate over the meta data and add them to the tags
-			meta_reflect := message.Update.Meta.ProtoReflect()
-			meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-				// Get the meta tags
-				tags[string(fd.Name())] = v.String()
-				return true // Continue iteration
-			})
+	// Create a WaitGroup to wait for the goroutines
+	var wg sync.WaitGroup
 
-			// Iterate over the values and add them to the fields
-			if message.Update.Core != nil {
-				measurement = "core_values"
-				core_reflect := message.Update.Core.Values.ProtoReflect()
-				core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
-			} else if message.Update.Sensor != nil {
-				measurement = "sensor_values"
-				sensor_reflect := message.Update.Sensor.Values.ProtoReflect()
-				sensor_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
-			}
+	// Run the goroutines
+	RunGoroutines(ctx, &wg, &mts, *flag_settime, *flag_daemon, db_client)
 
-			// Add an additional field with the gateway systems arrival time
-			// Currently used for debugging and sanity checking
-			fields["time_arrival"] = time.Now().Format(time.RFC3339)
-
-			// Prepare the InfluxDB point
-			point := influxdb2.NewPoint(
-				// Measurement
-				measurement,
-				// Tags
-				tags,
-				// Fields
-				fields,
-				// Timestamp
-				time.Unix(message.Update.UnixTime, 0),
-			)
-			fmt.Printf("Addint point: %+v\n", point)
-
-			// Write the point to InfluxDB
-			err := db_client.WriteData(point)
-			fmt.Println("Writing data... Err?", err)
-
-			fmt.Println("Data written to InfluxDB successfully")
-		}
-	} else {
-		mts.WaitInfo.Wait()
-	}
-
-	// --- Retrieve Data from InfluxDB ---
-	// Flux query to get latest measurements
-	query := fmt.Sprintf(`
-		from(bucket: "%s")
-			|> range(start: -15m)  // Retrieve data from the last 1 hour
-			|> filter(fn: (r) => r["_measurement"] == "core_values")
-	`, bucket)
-
-	// Execute the query
-	result, err := db_client.QueryData(query)
-	if err != nil {
-		log.Fatalf("Error querying data: %v", err)
-	}
-
-	// Iterate over the query result and print the data
-	for result.Next() {
-		fmt.Printf("Time: %v, Measurement: %v, Field: %v, Value: %v\n",
-			result.Record().Time(),
-			result.Record().Measurement(),
-			result.Record().Field(),
-			result.Record().Value())
-	}
-
-	// Check for errors in the query results
-	if result.Err() != nil {
-		log.Fatalf("Query failed: %v", result.Err())
-	}
-
-	fmt.Println("Data retrieved from InfluxDB successfully")
+    // Wait for all goroutines to finish
+    wg.Wait()
 }
