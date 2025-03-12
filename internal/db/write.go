@@ -9,9 +9,18 @@ import (
 
 // WriteData writes a point to the InfluxDB bucket
 func (db *InfluxDB) WriteData(point *influxdb_write.Point) error {
-	err := db.WriteAPI.WritePoint(context.Background(), point)
+	// Set a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), db.Timeout)
+	defer cancel()
+
+	// Try writing in the database with context
+	err := db.WriteAPI.WritePoint(ctx, point)
 	if err != nil {
-		return fmt.Errorf("failed to write data: %w", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("Database connection timed out")
+		} else {
+			return fmt.Errorf("Data error: %w", err)
+		}
 	}
 	return nil
 }

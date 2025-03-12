@@ -2,8 +2,8 @@ package db
 
 import (
 	"context"
-	"errors"
 	"testing"
+	"time"
 
 	influxdb_write "github.com/influxdata/influxdb-client-go/v2/api/write"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +16,13 @@ type MockWriteAPI struct {
 }
 
 func (m *MockWriteAPI) WritePoint(ctx context.Context, point ...*influxdb_write.Point) error {
-	args := m.Called(ctx, point)
+	args := m.Called(ctx, point)	
+	// Simulate a real delay to trigger context timeout
+	if args.Error(0) == context.DeadlineExceeded {
+		time.Sleep(Timeout + 1 * time.Second)
+	}
+
+	// Return the mocked error (or nil if successful)
 	return args.Error(0)
 }
 
@@ -48,9 +54,9 @@ func TestWriteData(t *testing.T) {
 			expectedErr:   "",
 		},
 		{
-			name:          "Failure - network error",
-			mockReturnErr: errors.New("network error"),
-			expectedErr:   "failed to write data: network error",
+			name:          "Database timeout",
+			mockReturnErr: context.DeadlineExceeded,
+			expectedErr:   "Database connection timed out",
 		},
 	}
 
@@ -67,6 +73,7 @@ func TestWriteData(t *testing.T) {
                 QueryAPI: nil,
                 Org:      "test-org",
                 Bucket:   "test-bucket",
+				Timeout:  Timeout,
             }
 
 			// Prepare the InfluxDB point
