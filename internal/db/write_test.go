@@ -43,7 +43,7 @@ func (m *MockWriteAPI) Flush(ctx context.Context) error {
 }
 
 
-func TestWriteData(t *testing.T) {
+func TestWritePointToDatabase(t *testing.T) {
 	// Define test cases
 	testCases := []struct {
 		name          string
@@ -85,8 +85,8 @@ func TestWriteData(t *testing.T) {
 			// Prepare the InfluxDB point
 			point := CreateTestPoint()
 
-			// Call WriteData
-			err := db.WriteData(point)
+			// Call WritePointToDatabase
+			err := db.WritePointToDatabase(point)
 
 			// Verify results based on the test cases
 			if testCase.expectedErr == "" {
@@ -102,7 +102,7 @@ func TestWriteData(t *testing.T) {
 	}
 }
 
-func TestWriteDataWithTimeout(t *testing.T) {
+func TestWritePointToDatabaseWithTimeout(t *testing.T) {
 	// Setup a mock WriteAPI to simulate timeout
 	mockWriteAPI := new(MockWriteAPI)
 	mockWriteAPI.On("WritePoint", mock.Anything, mock.Anything).Return(context.DeadlineExceeded)
@@ -119,8 +119,8 @@ func TestWriteDataWithTimeout(t *testing.T) {
 	// Prepare the InfluxDB point
 	point := CreateTestPoint()
 
-	// Call WriteData to simulate timeout and file write
-	err := db.WriteData(point)
+	// Call WritePointToDatabase to simulate timeout and file write
+	err := db.WritePointToDatabase(point)
 
 	// Ensure no error occurs
 	assert.NoError(t, err)

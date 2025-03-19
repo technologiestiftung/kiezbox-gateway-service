@@ -416,7 +416,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			fmt.Printf("Addint point: %+v\n", point)
 
 			// Write the point to InfluxDB
-			err := db_client.WriteData(point)
+			err := db_client.WritePointToDatabase(point)
 			fmt.Println("Writing data... Err?", err)
 
 			fmt.Println("Data written to InfluxDB successfully")
