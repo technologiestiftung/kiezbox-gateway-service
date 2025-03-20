@@ -58,6 +58,11 @@ func (m *MockMTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_clie
     wg.Done()
 }
 
+func (m *MockMTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
+    m.Called(ctx, wg)
+    wg.Done()
+}
+
 func (m *MockMTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64) {
     m.Called(ctx, wg, time)
     wg.Done()
@@ -74,6 +79,7 @@ func TestRunGoroutines(t *testing.T) {
     mockMTSerial.On("Reader", mock.Anything, mock.Anything).Return(nil)
     mockMTSerial.On("MessageHandler", mock.Anything, mock.Anything).Return(nil)
     mockMTSerial.On("DBWriter", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("DBWriterRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("Settime", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
@@ -107,6 +113,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "Reader", mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "MessageHandler", mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBWriter", mock.Anything, mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "DBWriterRetry", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "Settime", mock.Anything, mock.Anything, mock.Anything)
 
 	// Wait for all goroutines to finish
