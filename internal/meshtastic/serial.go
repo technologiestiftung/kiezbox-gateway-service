@@ -423,3 +423,34 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 		}
 	}
 }
+
+// DBWriterRetry tries to write cached points to the InfluxDB instance.
+func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	// Do retry every 10 seconds
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Retry goroutine shutting down.")
+			return
+		case <-ticker.C:
+			// Check if the database is connected before retrying
+			databaseConnected, err := db_client.Client.Ping(ctx)
+
+			if databaseConnected {
+				fmt.Println("Database connected, retrying cached points.")
+				db_client.RetryCachedPoints(db.CachedDataFile)
+			} else {
+				fmt.Println("No database connection. Skipping retry.", err)
+			}
+
+			fmt.Println("Database connected, retrying cached points.")
+			db_client.RetryCachedPoints(db.CachedDataFile)
+		}
+	}
+}

@@ -22,6 +22,7 @@ type MeshtasticDevice interface {
 	Reader(ctx context.Context, wg *sync.WaitGroup)
 	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
 	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
+	DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
 }
 
@@ -53,32 +54,7 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 
 	// Start the retry mechanism in its own goroutine
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("Retry goroutine shutting down.")
-				return
-			case <-ticker.C:
-                // Check if the database is connected before retrying
-				databaseConnected, err := db_client.Client.Ping(ctx)
-
-                if databaseConnected {
-					fmt.Println("Database connected, retrying cached points.")
-					db_client.RetryCachedPoints(db.CachedDataFile)
-				} else {
-                    fmt.Println("No database connection. Skipping retry.", err)
-                }
-
-                fmt.Println("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(db.CachedDataFile)
-			}
-		}
-	}()
+	go device.DBWriterRetry(ctx, wg, db_client)
 }
 
 func main() {
