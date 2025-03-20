@@ -1,9 +1,12 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/gob"
+	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,11 +129,11 @@ func TestWritePointToDatabaseWithTimeout(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check if the .gob file exists
-	_, err = os.Stat("cached_datapoints.gob")
+	_, err = os.Stat(CachedDataFile)
 	assert.NoError(t, err, "Expected .gob file to exist after timeout")
 
 	// Read and decode the last written point from the .gob file
-	file, err := os.Open("cached_datapoints.gob")
+	file, err := os.Open(CachedDataFile)
 	assert.NoError(t, err, "Failed to open .gob file")
 	defer file.Close()
 
@@ -176,4 +179,83 @@ func TestWritePointToDatabaseWithTimeout(t *testing.T) {
 
 	// Compare time
 	assert.Equal(t, point.Time(), decodedPoint.Time(), "Time does not match")
+}
+
+func TestWriteCachedPointsToDatabase(t *testing.T) {
+	// Define test cases
+	testCases := []struct {
+		name            string
+		mockReturnErrs  []error // One error per point
+		expectedRemain  int    // Expected number of remaining points
+		expectedLog     string // Expected log output
+		expectedLogCount int    // Expected number of times the log message appears
+	}{
+		{
+			name:           "All points written",
+			mockReturnErrs: []error{nil, nil},
+			expectedRemain: 0,
+			expectedLog:    "",
+			expectedLogCount: 0,
+		},
+		{
+			name:           "Some points written",
+			mockReturnErrs: []error{context.DeadlineExceeded, nil},
+			expectedRemain: 1,
+			expectedLog:    "Database connection timed out",
+			expectedLogCount: 1,
+		},
+		{
+			name:           "No points written",
+			mockReturnErrs: []error{context.DeadlineExceeded, context.DeadlineExceeded},
+			expectedRemain: 2,
+			expectedLog:    "Database connection timed out",
+			expectedLogCount: 2,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Initialize and set behavior of WriteAPI mock
+			mockWriteAPI := new(MockWriteAPI)
+
+			// Expect `WritePoint` to be called twice, returning the predefined errors
+			for _, err := range testCase.mockReturnErrs {
+				mockWriteAPI.On("WritePoint", mock.Anything, mock.Anything).Return(err).Once()
+			}
+
+			// Capture log output
+			var logBuf bytes.Buffer
+			log.SetOutput(&logBuf)
+			defer log.SetOutput(os.Stderr) // Reset after test
+
+			// Initialize InfluxDB instance mock
+			db := &InfluxDB{
+				Client:   nil,
+				WriteAPI: mockWriteAPI,
+				QueryAPI: nil,
+				Org:      "test-org",
+				Bucket:   "test-bucket",
+				Timeout:  Timeout,
+			}
+
+			// Generate an array of two InfluxDB points
+			points := []*influxdb_write.Point{
+				CreateTestPointDynamic(),
+				CreateTestPointDynamic(),
+			}
+
+			// Call WriteCachedPointsToDatabase and get remaining points
+			remainingPoints := db.WriteCachedPointsToDatabase(points)
+
+			// Assert the expected number of remaining points
+			assert.Equal(t, testCase.expectedRemain, len(remainingPoints), "Unexpected number of remaining points")
+
+			// Verify that the log appears the expected number of times in logs
+			logOutput := logBuf.String()
+			assert.Equal(t, testCase.expectedLogCount, strings.Count(logOutput, "Database connection timed out"))
+
+			// Assert expectations on the mock
+			mockWriteAPI.AssertExpectations(t)
+		})
+	}
 }

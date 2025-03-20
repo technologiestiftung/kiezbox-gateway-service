@@ -28,6 +28,27 @@ func CreateTestPoint() *influxdb_write.Point {
 	)
 }
 
+// Create an InfluxDB Point with a dynamic timestamp
+func CreateTestPointDynamic() *influxdb_write.Point {
+	return influxdb.NewPoint(
+		// Measurement
+		"sensor_data",
+		// Tags
+		map[string]string{
+			"box_id":    "1",
+			"district":  "1",
+		},
+		// Fields
+		map[string]any{
+			"router_powered":   true,
+			"temperature_out":  float32(30),
+			"temperature_in":   float32(28),
+		},
+		// Timestamp
+		time.Unix(time.Now().Unix(), 0),
+	)
+}
+
 // Create a valid InfluxDB query string
 func createQuery(bucket string) string {
 	return `
