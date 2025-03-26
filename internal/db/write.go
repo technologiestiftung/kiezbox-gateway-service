@@ -2,25 +2,23 @@ package db
 
 import (
 	"context"
-	"encoding/gob"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
+	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	influxdb_write "github.com/influxdata/influxdb-client-go/v2/api/write"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"kiezbox/internal/marshal"
 )
 
-const CachedDataFile = "cached_datapoints.gob"
+const CacheDir = "kiezbox/internal/cached"
 
-type SerializedPoint struct {
-	Measurement string
-	Tags        map[string]string
-	Fields      map[string]interface{}
-	Time        time.Time
-}
-
-// WritePointToDatabase writes a point to the InfluxDB bucket
+// WritePointToDatabase writes an InfluxDB point to the InfluxDB bucket
 func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	// Set a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), db.Timeout)
@@ -31,13 +29,7 @@ func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Println("Database connection timed out")
-
-			// Write the point to a .gob file
-			if err := WritePointToGobFile(CachedDataFile, point); err != nil {
-				log.Printf("Error writing point to gob file: %v", err)
-				return fmt.Errorf("Error writing point to gob file: %w", err)
-			}
-
+			return fmt.Errorf("Database connection timed out: %w", ctx.Err())
 		} else {
 			log.Println("Data error: %w", err)
 		}
@@ -45,182 +37,126 @@ func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	return nil
 }
 
-// WriteCachedPointsToDatabase writes a batch of cached points to the InfluxDB bucket and returns points that couldn't be written.
-func (db *InfluxDB) WriteCachedPointsToDatabase(points []*influxdb_write.Point) []*influxdb_write.Point {
-    // Set a timeout
-    ctx, cancel := context.WithTimeout(context.Background(), db.Timeout)
-    defer cancel()
+// WritePointToFile writes a point as Protobuf message to a file in the given directory
+func WritePointToFile(message *generated.KiezboxMessage, dir string) error {
+	// Create a filename based on the message's Unix time
+	filename := fmt.Sprintf("%d.pb", message.Update.UnixTime)
 
-    // Slice to collect points that couldn't be written
-    var remainingPoints []*influxdb_write.Point
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("Failed to create directory when caching: %w", err)
+	}
 
-    // Iterate over the list of points and write each one individually
-    for _, point := range points {
-        // Try writing each point to the database with context
-        err := db.WriteAPI.WritePoint(ctx, point)
+	// Marshal the message
+	marshalledMessage, err := marshal.MarshalKiezboxMessage(message)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal message when caching: %w", err)
+	}
+
+	// Write to file
+	filePath := filepath.Join(dir, filename)
+	if err := os.WriteFile(filePath, marshalledMessage, 0666); err != nil {
+		return fmt.Errorf("Failed to save cached message to file: %w", err)
+	}
+
+	return nil
+}
+
+// ReadPointFromFile reads a marshalled Protobuf message from a file and unmarshals it.
+func ReadPointFromFile(filename string) (*generated.KiezboxMessage, error) {
+	// Read the file content
+	marshalledMessage, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file %s: %w", filename, err)
+	}
+
+	// Unmarshal the Protobuf message
+	message, err := marshal.UnmarshalKiezboxMessage(marshalledMessage)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal message from file %s: %w", filename, err)
+	}
+
+	return message, nil
+}
+
+// RetryCachedPoints reads cached points from a directory and retries writing them to the database
+func (db *InfluxDB) RetryCachedPoints(dir string) {
+	// Read the directory
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		log.Fatalf("Failed to read directory %s: %v", dir, err)
+	}
+	
+	// Iterate over the files and read the points
+	for _, file := range files {
+		filePath := filepath.Join(dir, file.Name())
+        message, err := ReadPointFromFile(filePath) // Read and unmarshal Protobuf message
         if err != nil {
-            if ctx.Err() == context.DeadlineExceeded {
-                log.Println("Database connection timed out")
-            } else {
-                log.Printf("Data error: %v", err)
-            }
-            // Add the point to the remaining points slice
-            remainingPoints = append(remainingPoints, point)
-        }
-    }
-
-    // Return the points that couldn't be written
-    return remainingPoints
-}
-
-// WritePointToGobFile serializes the point and writes it to a gob file
-func WritePointToGobFile(filename string, point *influxdb_write.Point) error {
-	// Open or create the .gob file
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("Error opening .gob file: %w", err)
-	}
-	defer file.Close()
-
-	// Create a new encoder and Write the point to the file
-	encoder := gob.NewEncoder(file)
-
-	// Convert to a serialized struct
-	serializedPoint := SerializePoint(point)
-
-	// Write the point to the file
-	if err := encoder.Encode(serializedPoint); err != nil {
-		return fmt.Errorf("Error encoding point to .gob file: %w", err)
-	}
-
-	return nil
-}
-
-// WritePointsToGobFile serializes a batch of points and writes them to a gob file
-// If overwrite is true, it will overwrite the file. If false, it will append to the file.
-func WritePointsToGobFile(filename string, points []*influxdb_write.Point, overwrite bool) error {
-	var file *os.File
-	var err error
-
-	// Determine the file open mode based on the overwrite flag
-	if overwrite {
-		// Open the .gob file with the O_WRONLY and O_TRUNC flags to overwrite the file
-		file, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	} else {
-		// Open the .gob file with the O_APPEND flag to append to the file
-		file, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	}
-
-	if err != nil {
-		return fmt.Errorf("Error opening .gob file: %w", err)
-	}
-	defer file.Close()
-
-	// Create a new encoder
-	encoder := gob.NewEncoder(file)
-
-	// Iterate through all points, serialize each and write to the file
-	for _, point := range points {
-		// Convert to a serialized struct
-		serializedPoint := SerializePoint(point)
-
-		// Write the serialized point to the file
-		if err := encoder.Encode(serializedPoint); err != nil {
-			return fmt.Errorf("Error encoding point to .gob file: %w", err)
+            log.Printf("Failed to read file %s: %v", filePath, err)
+            continue
 		}
-	}
 
-	return nil
+		// Convert the Protobuf message to an InfluxDB point
+		point, err := KiezboxMessageToPoint(message)
+
+		// Write the message to the database
+		db.WritePointToDatabase(point)
+	}
 }
 
-// Convert influxdb_write.Point to SerializedPoint
-func SerializePoint(point *influxdb_write.Point) SerializedPoint {
-	// Convert tag list from []*protocol.Tag to map[string]string
+func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.Point, error) {
 	tags := make(map[string]string)
-	for _, tag := range point.TagList() {
-		tags[tag.Key] = tag.Value
-	}
+	fields := make(map[string]any)
+	var measurement string
 
-	// Convert field list from []*protocol.Field to map[string]interface{}
-	fields := make(map[string]interface{})
-	for _, field := range point.FieldList() {
-		fields[field.Key] = field.Value
-		}
+	// Iterate over the meta data and add them to the tags
+	meta_reflect := message.Update.Meta.ProtoReflect()
+	meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		// Get the meta tags
+		tags[string(fd.Name())] = v.String()
+		return true // Continue iteration
+	})
 
-	return SerializedPoint{
-		Measurement: point.Name(),
-		Tags:        tags,
-		Fields:      fields,
-		Time:        point.Time(),
-	}
-}
-
-// Convert SerializedPoint to influxdb_write.Point
-func UnserializePoint(sp *SerializedPoint) *influxdb_write.Point {
-	return influxdb_write.NewPoint(sp.Measurement, sp.Tags, sp.Fields, sp.Time)
-}
-
-// ReadPointsFromGobFile reads all cached points from the gob file and unserializes them into influxdb_write.Point
-func ReadPointsFromGobFile(filename string) ([]*influxdb_write.Point, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil // No file means no cached data
-		}
-		return nil, fmt.Errorf("error opening .gob file: %w", err)
-	}
-	defer file.Close()
-
-	var points []*influxdb_write.Point
-	decoder := gob.NewDecoder(file)
-	for {
-		var serializedPoint SerializedPoint
-		if err := decoder.Decode(&serializedPoint); err != nil {
-			if err.Error() == "EOF" {
-				break // End of file reached
+	// Iterate over the values and add them to the fields
+	if message.Update.Core != nil {
+		measurement = "core_values"
+		core_reflect := message.Update.Core.Values.ProtoReflect()
+		core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			if intVal, ok := v.Interface().(int32); ok {
+				fields[string(fd.Name())] = float64(intVal) / 1000.0
+			} else {
+				fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
 			}
-			return nil, fmt.Errorf("error decoding .gob file: %w", err)
-		}
-
-		// Unserialize the point and append it to the points slice
-		point := UnserializePoint(&serializedPoint)
-		points = append(points, point)
+			return true // Continue iteration
+		})
+	} else if message.Update.Sensor != nil {
+		measurement = "sensor_values"
+		sensor_reflect := message.Update.Sensor.Values.ProtoReflect()
+		sensor_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			if intVal, ok := v.Interface().(int32); ok {
+				fields[string(fd.Name())] = float64(intVal) / 1000.0
+			} else {
+				fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+			}
+			return true // Continue iteration
+		})
 	}
-	return points, nil
-}
 
+	// Add an additional field with the gateway systems arrival time
+	// Currently used for debugging and sanity checking
+	fields["time_arrival"] = time.Now().Format(time.RFC3339)
 
-func (db *InfluxDB) RetryCachedPoints(filename string) {
-    // Check if the file exists
-    if _, err := os.Stat(filename); os.IsNotExist(err) {
-        log.Printf("Cached file does not exist: %v", filename)
-        return
-    }
+	// Prepare the InfluxDB point
+	point := influxdb.NewPoint(
+		// Measurement
+		measurement,
+		// Tags
+		tags,
+		// Fields
+		fields,
+		// Timestamp
+		time.Unix(message.Update.UnixTime, 0),
+	)
 
-    // Read cached points from the .gob file
-    cachedPoints, err := ReadPointsFromGobFile(filename)
-    if err != nil {
-        log.Printf("Error reading cached points: %v", err)
-        return
-    }
-
-    if len(cachedPoints) == 0 {
-        return // No cached points to process
-    }
-
-    // Try sending cached points to the database
-    remainingPoints := db.WriteCachedPointsToDatabase(cachedPoints)
-
-    // If all points were written, delete the .gob file
-    if len(remainingPoints) == 0 {
-        if err := os.Remove(filename); err != nil {
-            log.Printf("Error deleting cached file: %v", err)
-        }
-        return
-    }
-
-    // Otherwise, update the .gob file with the remaining points
-    if err := WritePointsToGobFile(filename, remainingPoints, true); err != nil {
-        log.Printf("Error updating cached points: %v", err)
-    }
+	return point, nil
 }

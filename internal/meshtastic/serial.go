@@ -5,16 +5,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
 
-	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
@@ -360,66 +360,35 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if message == nil {
 				continue
 			}
-			fmt.Println("Handling Protobuf message")
-			tags := make(map[string]string)
-			fields := make(map[string]any)
-			var measurement string
 
-			// Iterate over the meta data and add them to the tags
-			meta_reflect := message.Update.Meta.ProtoReflect()
-			meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-				// Get the meta tags
-				tags[string(fd.Name())] = v.String()
-				return true // Continue iteration
-			})
-
-			// Iterate over the values and add them to the fields
-			if message.Update.Core != nil {
-				measurement = "core_values"
-				core_reflect := message.Update.Core.Values.ProtoReflect()
-				core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
-			} else if message.Update.Sensor != nil {
-				measurement = "sensor_values"
-				sensor_reflect := message.Update.Sensor.Values.ProtoReflect()
-				sensor_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
+			// Check connection to database before trying to write the point
+			databaseConnected, err := db_client.Client.Ping(ctx)
+			if !databaseConnected {
+				// Cache the message if database is not connected
+				fmt.Println("No database connection. Caching point.", err)
+				db.WritePointToFile(message, db.CacheDir)
+				return
 			}
 
-			// Add an additional field with the gateway systems arrival time
-			// Currently used for debugging and sanity checking
-			fields["time_arrival"] = time.Now().Format(time.RFC3339)
-
-			// Prepare the InfluxDB point
-			point := influxdb.NewPoint(
-				// Measurement
-				measurement,
-				// Tags
-				tags,
-				// Fields
-				fields,
-				// Timestamp
-				time.Unix(message.Update.UnixTime, 0),
-			)
-			fmt.Printf("Addint point: %+v\n", point)
+			fmt.Println("Handling Protobuf message")
+			// Convert the Protobuf message to an InfluxDB point
+			point, err := db.KiezboxMessageToPoint(message)
+			fmt.Printf("Adding point: %+v\n", point)
 
 			// Write the point to InfluxDB
-			err := db_client.WritePointToDatabase(point)
-			fmt.Println("Writing data... Err?", err)
+			err = db_client.WritePointToDatabase(point)
 
-			fmt.Println("Data written to InfluxDB successfully")
+			// Cache message if connection to database failed
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					log.Println("No connection to database, caching point.")
+					db.WritePointToFile(message, db.CacheDir)
+				} else {
+					log.Println("Unexpected error:", err)
+				}
+			} else {
+				fmt.Println("Data written to InfluxDB successfully")
+			}
 		}
 	}
 }
@@ -444,13 +413,10 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 
 			if databaseConnected {
 				fmt.Println("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(db.CachedDataFile)
+				db_client.RetryCachedPoints(db.CacheDir)
 			} else {
 				fmt.Println("No database connection. Skipping retry.", err)
 			}
-
-			fmt.Println("Database connected, retrying cached points.")
-			db_client.RetryCachedPoints(db.CachedDataFile)
 		}
 	}
 }
