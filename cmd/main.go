@@ -63,6 +63,7 @@ func main() {
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
+	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
@@ -81,7 +82,7 @@ func main() {
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
 	}
-	mts.Init(*flag_serial_device, *flag_serial_baud, portFactory)	
+	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, portFactory)	
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()

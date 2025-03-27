@@ -46,12 +46,13 @@ type MTSerial struct {
 	MyInfo	  *generated.MyNodeInfo
 	WaitInfo  sync.WaitGroup
 	portFactory portFactory
+	retryTime int64
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, portFactory portFactory) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int64, portFactory portFactory) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -62,6 +63,7 @@ func (mts *MTSerial) Init(dev string, baud int, portFactory portFactory) {
 		Baud: baud,
 	}
 	mts.portFactory = portFactory
+	mts.retryTime = retryTime
 	for {
 		var err = mts.Open()
 		if err == nil {
@@ -399,7 +401,7 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 	defer wg.Done()
 
 	// Do retry every 10 seconds
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Duration(mts.retryTime) * time.Second)
 	defer ticker.Stop()
 
 	for {
