@@ -46,13 +46,13 @@ type MTSerial struct {
 	MyInfo	  *generated.MyNodeInfo
 	WaitInfo  sync.WaitGroup
 	portFactory portFactory
-	retryTime int64
+	retryTime int
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int64, portFactory portFactory) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portFactory) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
