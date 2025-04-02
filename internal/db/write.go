@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -29,7 +30,7 @@ func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Println("Database connection timed out")
-			return fmt.Errorf("Database connection timed out: %w", ctx.Err())
+			return fmt.Errorf("database connection timed out: %w", ctx.Err())
 		} else {
 			log.Println("Data error: %w", err)
 		}
@@ -44,36 +45,36 @@ func WritePointToFile(message *generated.KiezboxMessage, dir string) error {
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("Failed to create directory when caching: %w", err)
+		return fmt.Errorf("failed to create directory when caching: %w", err)
 	}
 
 	// Marshal the message
 	marshalledMessage, err := marshal.MarshalKiezboxMessage(message)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal message when caching: %w", err)
+		return fmt.Errorf("failed to marshal message when caching: %w", err)
 	}
 
 	// Write to file
 	filePath := filepath.Join(dir, filename)
 	if err := os.WriteFile(filePath, marshalledMessage, 0666); err != nil {
-		return fmt.Errorf("Failed to save cached message to file: %w", err)
+		return fmt.Errorf("failed to save cached message to file: %w", err)
 	}
 
 	return nil
 }
 
 // ReadPointFromFile reads a marshalled Protobuf message from a file and unmarshals it.
-func ReadPointFromFile(filename string) (*generated.KiezboxMessage, error) {
+func ReadPointFromFile(filepath string) (*generated.KiezboxMessage, error) {
 	// Read the file content
-	marshalledMessage, err := os.ReadFile(filename)
+	marshalledMessage, err := os.ReadFile(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read file %s: %w", filename, err)
+		return nil, fmt.Errorf("failed to read file %s: %w", filepath, err)
 	}
 
 	// Unmarshal the Protobuf message
 	message, err := marshal.UnmarshalKiezboxMessage(marshalledMessage)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal message from file %s: %w", filename, err)
+		return nil, fmt.Errorf("failed to unmarshal message from file %s: %w", filepath, err)
 	}
 
 	return message, nil
@@ -86,21 +87,35 @@ func (db *InfluxDB) RetryCachedPoints(dir string) {
 	if err != nil {
 		log.Fatalf("Failed to read directory %s: %v", dir, err)
 	}
-	
+
 	// Iterate over the files and read the points
 	for _, file := range files {
 		filePath := filepath.Join(dir, file.Name())
-        message, err := ReadPointFromFile(filePath) // Read and unmarshal Protobuf message
-        if err != nil {
-            log.Printf("Failed to read file %s: %v", filePath, err)
-            continue
+		message, err := ReadPointFromFile(filePath) // Read and unmarshal Protobuf message
+		if err != nil {
+			log.Printf("Failed to read file %s: %v", filePath, err)
+			continue
 		}
 
 		// Convert the Protobuf message to an InfluxDB point
 		point, err := KiezboxMessageToPoint(message)
+		if err != nil {
+			log.Printf("Failed to convert message to point: %v", err)
+			continue // Skip this file and move to the next
+		}
 
 		// Write the message to the database
-		db.WritePointToDatabase(point)
+		err = db.WritePointToDatabase(point)
+
+		// Cache message if connection to database failed
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+			// Delete the file
+			if err := os.Remove(filePath); err != nil {
+				log.Printf("Failed to delete cached point %s: %v", filePath, err)
+			} else {
+				log.Printf("Successfully deleted cached point %s", filePath)
+			}
+		}
 	}
 }
 

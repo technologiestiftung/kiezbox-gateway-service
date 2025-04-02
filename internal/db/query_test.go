@@ -9,6 +9,8 @@ import (
 	"github.com/influxdata/influxdb-client-go/v2/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"kiezbox/testutils"
 )
 
 // Mocks
@@ -78,7 +80,7 @@ func TestQueryData(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Initialize and set behavior of QueryAPI mock
 			mockQueryAPI := new(MockQueryAPI)
-			query := createQuery("test-bucket")
+			query := testutils.CreateQuery("test-bucket")
 			mockQueryAPI.On("Query", mock.Anything, query).Return(testCase.mockReturn, testCase.mockError)
 
 			//  Initialize InfluxDB instance mock

@@ -23,8 +23,8 @@ import (
 // Constants used in the meshtastic stream protocol
 // which is documented here > https://meshtastic.org/docs/development/device/client-api/#streaming-version
 const (
-	start1	     = 0x94
-	start2	     = 0xC3
+	start1       = 0x94
+	start2       = 0xC3
 	maxProtoSize = 512
 )
 
@@ -37,16 +37,16 @@ type portFactory func(*serial.Config) (SerialPort, error)
 
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
-	conf      *serial.Config
-	port      SerialPort
-	config_id uint32
-	ToChan	  chan *generated.ToRadio
-	FromChan  chan *generated.FromRadio
-	KBChan	  chan *generated.KiezboxMessage
-	MyInfo	  *generated.MyNodeInfo
-	WaitInfo  sync.WaitGroup
+	conf        *serial.Config
+	port        SerialPort
+	config_id   uint32
+	ToChan      chan *generated.ToRadio
+	FromChan    chan *generated.FromRadio
+	KBChan      chan *generated.KiezboxMessage
+	MyInfo      *generated.MyNodeInfo
+	WaitInfo    sync.WaitGroup
 	portFactory portFactory
-	retryTime int
+	retryTime   int
 }
 
 // Init initializes the serial device of an MTSerial object
@@ -69,8 +69,8 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portF
 		if err == nil {
 			break
 		} else {
-		    fmt.Println("Waiting for serial Port to become available...")
-		    time.Sleep(time.Second * 3)
+			fmt.Println("Waiting for serial Port to become available...")
+			time.Sleep(time.Second * 3)
 		}
 	}
 }
@@ -81,10 +81,10 @@ func (mts *MTSerial) Open() (err error) {
 	mts.port, err = mts.portFactory(mts.conf)
 	if err != nil {
 		fmt.Printf("Failed to open serial port: %v\n", err)
-		return err;
+		return err
 	}
 	mts.WantConfig()
-	return nil;
+	return nil
 }
 
 func (mts *MTSerial) WantConfig() {
@@ -122,11 +122,11 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 			fmt.Println("Heartbeat stopped")
 			return
 		case t := <-ticker.C:
-		Heartbeat := &generated.ToRadio{
-			PayloadVariant: &generated.ToRadio_Heartbeat{},
-		}
-		fmt.Printf("Sending Heartbeat at %s\n", t)
-		mts.Write(Heartbeat)
+			Heartbeat := &generated.ToRadio{
+				PayloadVariant: &generated.ToRadio_Heartbeat{},
+			}
+			fmt.Printf("Sending Heartbeat at %s\n", t)
+			mts.Write(Heartbeat)
 		}
 	}
 }
@@ -161,8 +161,8 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 
 	// Create the MeshPacket
 	meshPacket := &generated.MeshPacket{
-		From:	 0, //TODO: what should be sender id ?
-		To:	 mts.MyInfo.MyNodeNum,
+		From:    0, //TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
 		Channel: 2, //TODO: get Channel dynamically
 		PayloadVariant: &generated.MeshPacket_Decoded{
 			Decoded: dataMessage,
@@ -176,17 +176,16 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 		},
 	}
 
-
 	fmt.Printf("Setting time to unix time %d\n", time)
 
-    // Check if the context has been canceled before attempting to write
-    select {
-    case <-ctx.Done():
-        return
-    default:
-        // Send the message
-        mts.Write(toRadio)
-    }
+	// Check if the context has been canceled before attempting to write
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		// Send the message
+		mts.Write(toRadio)
+	}
 
 	return
 }
@@ -282,7 +281,7 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 						break
 					}
 					time.Sleep(time.Second * 3)
-				}	
+				}
 				continue
 			}
 
@@ -369,7 +368,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 				// Cache the message if database is not connected
 				fmt.Println("No database connection. Caching point.", err)
 				db.WritePointToFile(message, db.CacheDir)
-				return
+				continue
 			}
 
 			fmt.Println("Handling Protobuf message")
