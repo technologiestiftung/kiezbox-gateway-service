@@ -17,8 +17,8 @@ import (
 // Using an interface as an intermediate layer instead of calling the meshtastic functions directly
 // allows for dependency injection, essential for unittesting.
 type MeshtasticDevice interface {
-    Writer(ctx context.Context, wg *sync.WaitGroup)
-    Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
+	Writer(ctx context.Context, wg *sync.WaitGroup)
+	Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
 	Reader(ctx context.Context, wg *sync.WaitGroup)
 	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
 	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
@@ -26,14 +26,13 @@ type MeshtasticDevice interface {
 	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
 }
 
-
 // RunGoroutines orchestrates the goroutines that run the service.
 func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, setTime bool, daemon bool, db_client *db.InfluxDB) {
 	// Launch goroutines
 	wg.Add(1)
 	go device.Writer(ctx, wg)
 	wg.Add(1)
-	go device.Heartbeat(ctx, wg, 30 * time.Second)
+	go device.Heartbeat(ctx, wg, 30*time.Second)
 	wg.Add(1)
 	go device.Reader(ctx, wg)
 	wg.Add(1)
@@ -48,8 +47,8 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	if daemon {
 		wg.Add(1)
 		go device.DBWriter(ctx, wg, db_client)
-	// } else {
-	// 	mts.WaitInfo.Wait()
+		// } else {
+		// 	mts.WaitInfo.Wait()
 	}
 
 	// Start the retry mechanism in its own goroutine
@@ -64,6 +63,7 @@ func main() {
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
+	flag_timeout := flag.Int("retry", 1, "Database timeout in seconds")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
@@ -82,13 +82,13 @@ func main() {
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
 	}
-	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, portFactory)	
+	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, portFactory)
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
 
 	// Initialize InfluxDB client
-	db_client := db.CreateClient(url, token, org, bucket)
+	db_client := db.CreateClient(url, token, org, bucket, *flag_timeout)
 	defer db_client.Close()
 
 	// Create a context with cancel
@@ -101,6 +101,6 @@ func main() {
 	// Run the goroutines
 	RunGoroutines(ctx, &wg, &mts, *flag_settime, *flag_daemon, db_client)
 
-    // Wait for all goroutines to finish
-    wg.Wait()
+	// Wait for all goroutines to finish
+	wg.Wait()
 }

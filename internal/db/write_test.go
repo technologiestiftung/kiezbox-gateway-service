@@ -17,6 +17,10 @@ import (
 	"kiezbox/testutils"
 )
 
+// Set the test timeout to a very short duration
+// to ensure that the context timeout is triggered quickly
+const testTimeout = 1 * time.Nanosecond
+
 // WriteAPI Mocks
 type MockWriteAPI struct {
 	mock.Mock
@@ -26,7 +30,7 @@ func (m *MockWriteAPI) WritePoint(ctx context.Context, point ...*influxdb_write.
 	args := m.Called(ctx, point)
 	// Simulate a real delay to trigger context timeout
 	if args.Error(0) == context.DeadlineExceeded {
-		time.Sleep(Timeout + 1*time.Second)
+		time.Sleep(testTimeout + 1*time.Second)
 	}
 
 	// Return the mocked error (or nil if successful)
@@ -74,7 +78,7 @@ func (m *MockInfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	args := m.Called(point)
 	// Simulate a real delay to trigger context timeout
 	if args.Error(0) == context.DeadlineExceeded {
-		time.Sleep(Timeout + 1*time.Second)
+		time.Sleep(testTimeout + 1*time.Second)
 	}
 	// Return the mocked error (or nil if successful)
 	return args.Error(0)
@@ -116,7 +120,7 @@ func TestWritePointToDatabase(t *testing.T) {
 				QueryAPI: nil,
 				Org:      "test-org",
 				Bucket:   "test-bucket",
-				Timeout:  Timeout,
+				Timeout:  testTimeout,
 			}
 
 			// Prepare the InfluxDB point
@@ -261,7 +265,7 @@ func TestRetryCachedPoints(t *testing.T) {
 				QueryAPI: nil,
 				Org:      "test-org",
 				Bucket:   "test-bucket",
-				Timeout:  Timeout,
+				Timeout:  testTimeout,
 			}
 
 			// Get the filenames from the directory

@@ -9,8 +9,6 @@ import (
 	influxdb_api "github.com/influxdata/influxdb-client-go/v2/api"
 )
 
-const Timeout = 1 * time.Second
-
 type InfluxDB struct {
 	Client   influxdb.Client
 	WriteAPI influxdb_api.WriteAPIBlocking
@@ -21,7 +19,7 @@ type InfluxDB struct {
 }
 
 // CreateClient initializes the InfluxDB client and APIs
-func CreateClient(url, token, org, bucket string) *InfluxDB {
+func CreateClient(url, token, org, bucket string, timeout int) *InfluxDB {
 	// Create a new InfluxDB client
 	client := influxdb.NewClient(url, token)
 
@@ -41,7 +39,7 @@ func CreateClient(url, token, org, bucket string) *InfluxDB {
 		QueryAPI: queryAPI,
 		Org:      org,
 		Bucket:   bucket,
-		Timeout: Timeout,
+		Timeout:  time.Duration(timeout) * time.Second,
 	}
 }
 
