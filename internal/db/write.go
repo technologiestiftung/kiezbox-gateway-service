@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/uuid"
 	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	influxdb_write "github.com/influxdata/influxdb-client-go/v2/api/write"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -40,8 +41,8 @@ func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 
 // WritePointToFile writes a point as Protobuf message to a file in the given directory
 func WritePointToFile(message *generated.KiezboxMessage, dir string) error {
-	// Create a filename based on the message's Unix time
-	filename := fmt.Sprintf("%d.pb", message.Update.UnixTime)
+	// Create a filename
+	filename := fmt.Sprintf("%s.pb", uuid.New().String())
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(dir, 0755); err != nil {

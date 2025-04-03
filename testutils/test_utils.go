@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/uuid"
 	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	influxdb_write "github.com/influxdata/influxdb-client-go/v2/api/write"
 	"google.golang.org/protobuf/proto"
@@ -45,8 +46,8 @@ func CreateKiezboxMessageFile(dir string) {
 		return
 	}
 
-	// Generate the filename based on Unix time
-	filename := fmt.Sprintf("%d.pb", message.Update.UnixTime)
+	// Generate the filename
+	filename := fmt.Sprintf("%s.pb", uuid.New().String())
 
 	// Create the full file path
 	filePath := filepath.Join(".", filename)
