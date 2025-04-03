@@ -30,7 +30,7 @@ func (m *MockWriteAPI) WritePoint(ctx context.Context, point ...*influxdb_write.
 	args := m.Called(ctx, point)
 	// Simulate a real delay to trigger context timeout
 	if args.Error(0) == context.DeadlineExceeded {
-		time.Sleep(testTimeout + 1*time.Second)
+		time.Sleep(testTimeout)
 	}
 
 	// Return the mocked error (or nil if successful)
@@ -78,7 +78,7 @@ func (m *MockInfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	args := m.Called(point)
 	// Simulate a real delay to trigger context timeout
 	if args.Error(0) == context.DeadlineExceeded {
-		time.Sleep(testTimeout + 1*time.Second)
+		time.Sleep(testTimeout)
 	}
 	// Return the mocked error (or nil if successful)
 	return args.Error(0)
