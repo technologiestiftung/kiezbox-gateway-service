@@ -55,3 +55,17 @@ To get a visual representation of code coverage in the tests.
 ```
 go tool cover -html=coverage.out
 ```
+
+## API
+
+To update the API Swagger documentation (e.g., after adding new routes, modifying handlers or chaning Swagger metadata), run the following command from the root. This is the same as running `swag init` from the `api` directory:
+
+```
+swag init --output ./api/docs --dir ./api
+```
+
+To access the Swagger documentation, go to:
+
+```
+http://localhost:8080/swagger/index.html
+```
