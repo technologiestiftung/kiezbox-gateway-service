@@ -39,6 +39,9 @@ func CreateKiezboxMessageFile(dir string) {
 	// Create the message
 	message := CreateKiezboxMessage(time.Now().Unix())
 
+	// Set the arrival time to the current time
+	message.Update.ArrivalTime = proto.Int64(time.Now().Unix())
+
 	// Marshal the message
 	marshaled, err := proto.Marshal(message)
 	if err != nil {

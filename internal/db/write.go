@@ -159,7 +159,6 @@ func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.P
 	}
 
 	// Get arrival time and set as field
-
 	fields["time_arrival"] = time.Unix(*message.Update.ArrivalTime, 0).Format(time.RFC3339)
 
 	// Prepare the InfluxDB point
