@@ -2,28 +2,30 @@ package marshal
 
 import (
 	"testing"
-
-	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"kiezbox/testutils"
 )
 
 func TestMarshalKiezboxMessageValid(t *testing.T) {
 	// Define test cases
 	testCases := []struct {
-		name          string
+		name           string
 		kiezboxMessage *generated.KiezboxMessage
-		expectError   bool
+		expectError    bool
 	}{
 		{
-			name:          "Successful Marshalling",
-			kiezboxMessage: CreateKiezboxMessage(),
-			expectError:   false,
+			name:           "Successful Marshalling",
+			kiezboxMessage: testutils.CreateKiezboxMessage(time.Now().Unix()),
+			expectError:    false,
 		},
 		{
-			name:          "Empty Message",
+			name:           "Empty Message",
 			kiezboxMessage: nil, // Invalid message to trigger an error
-			expectError:   true,
+			expectError:    true,
 		},
 	}
 
@@ -47,19 +49,19 @@ func TestMarshalKiezboxMessageValid(t *testing.T) {
 func TestUnmarshalKiezboxMessageValid(t *testing.T) {
 	// Table-driven tests
 	testCases := []struct {
-		name          string
+		name           string
 		kiezboxMessage *generated.KiezboxMessage
-		expectError   bool
+		expectError    bool
 	}{
 		{
-			name:          "Successful Unmarshalling",
-			kiezboxMessage: CreateKiezboxMessage(),
-			expectError:   false,
+			name:           "Successful Unmarshalling",
+			kiezboxMessage: testutils.CreateKiezboxMessage(time.Now().Unix()),
+			expectError:    false,
 		},
 		{
-			name:          "Invalid Data (corrupted)",
+			name:           "Invalid Data (corrupted)",
 			kiezboxMessage: nil, // Passing invalid data to trigger an error
-			expectError:   true,
+			expectError:    true,
 		},
 	}
 

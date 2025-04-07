@@ -5,16 +5,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
 
-	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
@@ -23,8 +23,8 @@ import (
 // Constants used in the meshtastic stream protocol
 // which is documented here > https://meshtastic.org/docs/development/device/client-api/#streaming-version
 const (
-	start1	     = 0x94
-	start2	     = 0xC3
+	start1       = 0x94
+	start2       = 0xC3
 	maxProtoSize = 512
 )
 
@@ -37,21 +37,22 @@ type portFactory func(*serial.Config) (SerialPort, error)
 
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
-	conf      *serial.Config
-	port      SerialPort
-	config_id uint32
-	ToChan	  chan *generated.ToRadio
-	FromChan  chan *generated.FromRadio
-	KBChan	  chan *generated.KiezboxMessage
-	MyInfo	  *generated.MyNodeInfo
-	WaitInfo  sync.WaitGroup
+	conf        *serial.Config
+	port        SerialPort
+	config_id   uint32
+	ToChan      chan *generated.ToRadio
+	FromChan    chan *generated.FromRadio
+	KBChan      chan *generated.KiezboxMessage
+	MyInfo      *generated.MyNodeInfo
+	WaitInfo    sync.WaitGroup
 	portFactory portFactory
+	retryTime   int
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, portFactory portFactory) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portFactory) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -62,13 +63,14 @@ func (mts *MTSerial) Init(dev string, baud int, portFactory portFactory) {
 		Baud: baud,
 	}
 	mts.portFactory = portFactory
+	mts.retryTime = retryTime
 	for {
 		var err = mts.Open()
 		if err == nil {
 			break
 		} else {
-		    fmt.Println("Waiting for serial Port to become available...")
-		    time.Sleep(time.Second * 3)
+			fmt.Println("Waiting for serial Port to become available...")
+			time.Sleep(time.Second * 3)
 		}
 	}
 }
@@ -79,10 +81,10 @@ func (mts *MTSerial) Open() (err error) {
 	mts.port, err = mts.portFactory(mts.conf)
 	if err != nil {
 		fmt.Printf("Failed to open serial port: %v\n", err)
-		return err;
+		return err
 	}
 	mts.WantConfig()
-	return nil;
+	return nil
 }
 
 func (mts *MTSerial) WantConfig() {
@@ -120,11 +122,11 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 			fmt.Println("Heartbeat stopped")
 			return
 		case t := <-ticker.C:
-		Heartbeat := &generated.ToRadio{
-			PayloadVariant: &generated.ToRadio_Heartbeat{},
-		}
-		fmt.Printf("Sending Heartbeat at %s\n", t)
-		mts.Write(Heartbeat)
+			Heartbeat := &generated.ToRadio{
+				PayloadVariant: &generated.ToRadio_Heartbeat{},
+			}
+			fmt.Printf("Sending Heartbeat at %s\n", t)
+			mts.Write(Heartbeat)
 		}
 	}
 }
@@ -159,8 +161,8 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 
 	// Create the MeshPacket
 	meshPacket := &generated.MeshPacket{
-		From:	 0, //TODO: what should be sender id ?
-		To:	 mts.MyInfo.MyNodeNum,
+		From:    0, //TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
 		Channel: 2, //TODO: get Channel dynamically
 		PayloadVariant: &generated.MeshPacket_Decoded{
 			Decoded: dataMessage,
@@ -174,17 +176,16 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 		},
 	}
 
-
 	fmt.Printf("Setting time to unix time %d\n", time)
 
-    // Check if the context has been canceled before attempting to write
-    select {
-    case <-ctx.Done():
-        return
-    default:
-        // Send the message
-        mts.Write(toRadio)
-    }
+	// Check if the context has been canceled before attempting to write
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		// Send the message
+		mts.Write(toRadio)
+	}
 
 	return
 }
@@ -280,7 +281,7 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 						break
 					}
 					time.Sleep(time.Second * 3)
-				}	
+				}
 				continue
 			}
 
@@ -360,66 +361,66 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if message == nil {
 				continue
 			}
-			fmt.Println("Handling Protobuf message")
-			tags := make(map[string]string)
-			fields := make(map[string]any)
-			var measurement string
 
-			// Iterate over the meta data and add them to the tags
-			meta_reflect := message.Update.Meta.ProtoReflect()
-			meta_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-				// Get the meta tags
-				tags[string(fd.Name())] = v.String()
-				return true // Continue iteration
-			})
+			// Set the arrival time to the current time
+			message.Update.ArrivalTime = proto.Int64(time.Now().Unix())
 
-			// Iterate over the values and add them to the fields
-			if message.Update.Core != nil {
-				measurement = "core_values"
-				core_reflect := message.Update.Core.Values.ProtoReflect()
-				core_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
-			} else if message.Update.Sensor != nil {
-				measurement = "sensor_values"
-				sensor_reflect := message.Update.Sensor.Values.ProtoReflect()
-				sensor_reflect.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-					if intVal, ok := v.Interface().(int32); ok {
-						fields[string(fd.Name())] = float64(intVal) / 1000.0
-					} else {
-						fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
-					}
-					return true // Continue iteration
-				})
+			// Check connection to database before trying to write the point
+			databaseConnected, err := db_client.Client.Ping(ctx)
+			if !databaseConnected {
+				// Cache the message if database is not connected
+				fmt.Println("No database connection. Caching point.", err)
+				db.WritePointToFile(message, db.CacheDir)
+				continue
 			}
 
-			// Add an additional field with the gateway systems arrival time
-			// Currently used for debugging and sanity checking
-			fields["time_arrival"] = time.Now().Format(time.RFC3339)
-
-			// Prepare the InfluxDB point
-			point := influxdb.NewPoint(
-				// Measurement
-				measurement,
-				// Tags
-				tags,
-				// Fields
-				fields,
-				// Timestamp
-				time.Unix(message.Update.UnixTime, 0),
-			)
-			fmt.Printf("Addint point: %+v\n", point)
+			fmt.Println("Handling Protobuf message")
+			// Convert the Protobuf message to an InfluxDB point
+			point, err := db.KiezboxMessageToPoint(message)
+			fmt.Printf("Adding point: %+v\n", point)
 
 			// Write the point to InfluxDB
-			err := db_client.WriteData(point)
-			fmt.Println("Writing data... Err?", err)
+			err = db_client.WritePointToDatabase(point)
 
-			fmt.Println("Data written to InfluxDB successfully")
+			// Cache message if connection to database failed
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					log.Println("No connection to database, caching point.")
+					db.WritePointToFile(message, db.CacheDir)
+				} else {
+					log.Println("Unexpected error:", err)
+				}
+			} else {
+				fmt.Println("Data written to InfluxDB successfully")
+			}
+		}
+	}
+}
+
+// DBWriterRetry tries to write cached points to the InfluxDB instance.
+func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	// Do retry every 10 seconds
+	ticker := time.NewTicker(time.Duration(mts.retryTime) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Retry goroutine shutting down.")
+			return
+		case <-ticker.C:
+			// Check if the database is connected before retrying
+			databaseConnected, err := db_client.Client.Ping(ctx)
+
+			if databaseConnected {
+				fmt.Println("Database connected, retrying cached points.")
+				db_client.RetryCachedPoints(db.CacheDir)
+			} else {
+				fmt.Println("No database connection. Skipping retry.", err)
+			}
 		}
 	}
 }

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"log"
+	"time"
 
 	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	influxdb_api "github.com/influxdata/influxdb-client-go/v2/api"
@@ -14,10 +15,11 @@ type InfluxDB struct {
 	QueryAPI influxdb_api.QueryAPI
 	Org      string
 	Bucket   string
+	Timeout  time.Duration
 }
 
 // CreateClient initializes the InfluxDB client and APIs
-func CreateClient(url, token, org, bucket string) *InfluxDB {
+func CreateClient(url, token, org, bucket string, timeout int) *InfluxDB {
 	// Create a new InfluxDB client
 	client := influxdb.NewClient(url, token)
 
@@ -37,6 +39,7 @@ func CreateClient(url, token, org, bucket string) *InfluxDB {
 		QueryAPI: queryAPI,
 		Org:      org,
 		Bucket:   bucket,
+		Timeout:  time.Duration(timeout) * time.Second,
 	}
 }
 
