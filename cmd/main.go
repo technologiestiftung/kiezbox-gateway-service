@@ -63,7 +63,7 @@ func main() {
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
-	flag_timeout := flag.Int("retry", 1, "Database timeout in seconds")
+	flag_timeout := flag.Int("timeout", 1, "Database timeout in seconds")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
