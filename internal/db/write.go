@@ -158,9 +158,9 @@ func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.P
 		})
 	}
 
-	// Add an additional field with the gateway systems arrival time
-	// Currently used for debugging and sanity checking
-	fields["time_arrival"] = time.Now().Format(time.RFC3339)
+	// Get arrival time and set as field
+
+	fields["time_arrival"] = time.Unix(*message.Update.ArrivalTime, 0).Format(time.RFC3339)
 
 	// Prepare the InfluxDB point
 	point := influxdb.NewPoint(

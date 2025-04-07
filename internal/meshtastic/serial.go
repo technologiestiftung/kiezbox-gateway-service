@@ -362,6 +362,9 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 				continue
 			}
 
+			// Set the arrival time to the current time
+			message.Update.ArrivalTime = proto.Int64(time.Now().Unix())
+
 			// Check connection to database before trying to write the point
 			databaseConnected, err := db_client.Client.Ping(ctx)
 			if !databaseConnected {
