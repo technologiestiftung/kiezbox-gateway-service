@@ -24,6 +24,7 @@ type MeshtasticDevice interface {
 	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
+	APIHandler(ctx context.Context, wg *sync.WaitGroup)
 }
 
 // RunGoroutines orchestrates the goroutines that run the service.
@@ -54,6 +55,10 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	// Start the retry mechanism in its own goroutine
 	wg.Add(1)
 	go device.DBWriterRetry(ctx, wg, db_client)
+
+	// Start the API in its own goroutine
+	wg.Add(1)
+	go device.APIHandler(ctx, wg)
 }
 
 func main() {
@@ -64,6 +69,7 @@ func main() {
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
 	flag_timeout := flag.Int("timeout", 1, "Database timeout in seconds")
+	flag_api_port := flag.String("api_port", "8080", "API port")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
@@ -82,7 +88,7 @@ func main() {
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
 	}
-	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, portFactory)
+	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, *flag_api_port, portFactory)
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
