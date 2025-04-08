@@ -10,12 +10,17 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 
+	"kiezbox/api/routes"
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
@@ -47,12 +52,13 @@ type MTSerial struct {
 	WaitInfo    sync.WaitGroup
 	portFactory portFactory
 	retryTime   int
+	apiPort     string
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portFactory) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -64,6 +70,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portF
 	}
 	mts.portFactory = portFactory
 	mts.retryTime = retryTime
+	mts.apiPort = apiPort
 	for {
 		var err = mts.Open()
 		if err == nil {
@@ -422,5 +429,38 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 				fmt.Println("No database connection. Skipping retry.", err)
 			}
 		}
+	}
+}
+
+// APIHandler starts the API for the Kiezbox Gateway Service.
+func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	// Create a new Gin router
+	r := gin.Default()
+
+	// Register API routes
+	routes.RegisterRoutes(r)
+
+	// Serve Swagger UI at /swagger
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Configure the HTTP server
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%s", mts.apiPort),
+		Handler: r,
+	}
+
+	// Start the HTTP server
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Failed to start API server: %v", err)
+	}
+
+	// Handle context cancellation and server shutdown
+	<-ctx.Done()
+	fmt.Println("Shutting down API server...")
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("API server forced to shut down: %v", err)
 	}
 }
