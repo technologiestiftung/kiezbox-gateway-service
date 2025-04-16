@@ -93,7 +93,7 @@ func TestRunGoroutines(t *testing.T) {
 	}
 
 	flag_settime := true
-	flag_daemon := true
+	flag_dbwriter := true
 	db_client := &db.InfluxDB{} // Mocked or a real one if needed
 
 	// Initialize with a mock serial port
@@ -107,7 +107,7 @@ func TestRunGoroutines(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Run the function under test
-	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_daemon, db_client)
+	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_dbwriter, db_client)
 
 	// Cancel the context after a small interval
 	time.Sleep(time.Millisecond * 1)

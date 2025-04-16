@@ -28,7 +28,7 @@ type MeshtasticDevice interface {
 }
 
 // RunGoroutines orchestrates the goroutines that run the service.
-func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, setTime bool, daemon bool, db_client *db.InfluxDB) {
+func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, setTime bool, dbwriter bool, db_client *db.InfluxDB) {
 	// Launch goroutines
 	wg.Add(1)
 	go device.Writer(ctx, wg)
@@ -45,7 +45,7 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	}
 
 	// Process incoming KiexBox messages in its own goroutine
-	if daemon {
+	if dbwriter {
 		wg.Add(1)
 		go device.DBWriter(ctx, wg, db_client)
 		// } else {
@@ -63,7 +63,7 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 
 func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
-	flag_daemon := flag.Bool("daemon", false, "Tells the service to run as (background) daemon")
+	flag_dbwriter := flag.Bool("dbwriter", false, "Tells the service to run the dbwriter routine")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
@@ -105,7 +105,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	// Run the goroutines
-	RunGoroutines(ctx, &wg, &mts, *flag_settime, *flag_daemon, db_client)
+	RunGoroutines(ctx, &wg, &mts, *flag_settime, *flag_dbwriter, db_client)
 
 	// Wait for all goroutines to finish
 	wg.Wait()
