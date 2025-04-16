@@ -424,3 +424,41 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 		}
 	}
 }
+
+// WIP from here
+// GetConfig sends a request to the meshtastic device to get the current configuration
+func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup) {
+	mts.WaitInfo.Wait()
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	// Create the Admin message
+	adminMessage := &generated.AdminMessage{
+		PayloadVariant: &generated.AdminMessage_GetConfigRequest{
+			GetConfigRequest: generated.AdminMessage_DEVICE_CONFIG, // TODO: Is this the config type we want to use?
+		},
+	}
+
+	// Marshal the Admin message
+	adminData, err := proto.Marshal(adminMessage)
+	if err != nil {
+		fmt.Printf("Failed to marshal AdminMessage: %v", err)
+	}
+
+	// TODO: Prepare adminData to send to appropriate channel
+
+	fmt.Printf("Sending config request")
+
+	// Check if the context has been canceled before attempting to write
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		// Send the message
+		mts.Write(toRadio) // TODO: Is this the channel we want to use?
+	}
+
+	return
+}
+
+// WIP to here

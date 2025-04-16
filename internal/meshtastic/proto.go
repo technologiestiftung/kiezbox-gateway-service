@@ -45,8 +45,20 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 							debugPrintProtobuf(&KiezboxMessage)
 							mts.KBChan <- &KiezboxMessage
 						}
+					// WIP from here
+					case generated.PortNum_ADMIN_APP:
+						var AdminMessage generated.AdminMessage
+						err := proto.Unmarshal(v.Decoded.Payload, &AdminMessage)
+						if err != nil {
+							fmt.Println("Failed to unmarshal AdminMessage: %w", err)
+						} else {
+							fmt.Println("Sucessfully extracted AdminMessage:")
+							debugPrintProtobuf(&AdminMessage)
+							// TODO: Handle config response and send to the appropriate channel
+						}
+					// WIP to here
 					default:
-						fmt.Println("Payload variant not a Kiezbox Message")
+						fmt.Println("Payload variant not an accepted type of message")
 					}
 				default:
 					// fmt.Println("Payload variant is encrypted")
