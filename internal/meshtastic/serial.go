@@ -11,6 +11,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"reflect"
 	"sync"
 	"time"
 
@@ -55,6 +56,10 @@ type MTSerial struct {
 	apiPort     string
 }
 
+func interfaceIsNil(i interface{}) bool {
+    return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
+}
+
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
@@ -71,14 +76,9 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 	mts.portFactory = portFactory
 	mts.retryTime = retryTime
 	mts.apiPort = apiPort
-	for {
-		var err = mts.Open()
-		if err == nil {
-			break
-		} else {
-			fmt.Println("Waiting for serial Port to become available...")
-			time.Sleep(time.Second * 3)
-		}
+	var err = mts.Open()
+	if err != nil {
+		fmt.Println("Serial port not available yet. Reader will retry opening it. ")
 	}
 }
 
@@ -208,10 +208,6 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
-	if mts.port == nil {
-		fmt.Println("Serial port not initialized")
-		return
-	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -242,7 +238,7 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 			// Debug output
 			fmt.Printf("Sending packet (Hex): %x\n", packet)
 			// Write the packet to the serial port
-			if mts.port != nil {
+			if !interfaceIsNil(mts.port) {
 				_, err = mts.port.Write(packet)
 				if err != nil {
 					fmt.Println("failed to write to serial port: %w", err)
@@ -264,11 +260,6 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
 
-	if mts.port == nil {
-		fmt.Println("Serial port not initialized")
-		return
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -277,10 +268,19 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 		default:
 			// Read one byte at a time from the serial port.
 			byteBuf := make([]byte, 1)
-			_, err := mts.port.Read(byteBuf)
-			if err != nil {
-				fmt.Printf("Error reading from serial port: %v\n", err)
-				mts.Close()
+			var portbroken bool = false
+			if interfaceIsNil(mts.port) {
+				fmt.Println("Serial port is not initialized:", mts.port)
+				portbroken = true
+			} else {
+				_, err := mts.port.Read(byteBuf)
+				if err != nil {
+					fmt.Printf("Error reading from serial port: %v\n", err)
+					portbroken = true
+					mts.Close()
+				}
+			}
+			if portbroken {
 				for {
 					fmt.Println("Waiting for device to reconnect...")
 					var err = mts.Open()
@@ -409,7 +409,7 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
-	// Do retry every 10 seconds
+	// Do retry every mts.retryTime seconds
 	ticker := time.NewTicker(time.Duration(mts.retryTime) * time.Second)
 	defer ticker.Stop()
 
