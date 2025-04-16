@@ -68,6 +68,11 @@ func (m *MockMTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int
 	wg.Done()
 }
 
+func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+	m.Called(ctx, wg)
+	wg.Done()
+}
+
 func TestRunGoroutines(t *testing.T) {
 	// Setup
 	mockMTSerial := &MockMTSerial{}
@@ -81,18 +86,19 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.On("DBWriter", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("DBWriterRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("Settime", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything).Return(nil)
 
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return mockMTSerial, nil
 	}
 
 	flag_settime := true
-	flag_daemon := true
+	flag_dbwriter := true
 	db_client := &db.InfluxDB{} // Mocked or a real one if needed
 
 	// Initialize with a mock serial port
 	var mts meshtastic.MTSerial
-	mts.Init("/dev/mockTTYUSB0", 115200, 10, portFactory)
+	mts.Init("/dev/mockTTYUSB0", 115200, 10, "8000", portFactory)
 
 	// Create a context with cancel
 	ctx, cancel := context.WithCancel(context.Background())
@@ -101,7 +107,7 @@ func TestRunGoroutines(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Run the function under test
-	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_daemon, db_client)
+	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_dbwriter, db_client)
 
 	// Cancel the context after a small interval
 	time.Sleep(time.Millisecond * 1)
@@ -115,6 +121,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "DBWriter", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBWriterRetry", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "Settime", mock.Anything, mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything)
 
 	// Wait for all goroutines to finish
 	wg.Wait()
