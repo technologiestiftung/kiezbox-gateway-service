@@ -12,4 +12,5 @@ func RegisterRoutes(r *gin.Engine) {
 	r.GET("/mode", handlers.Mode)
 	r.POST("/validateSession", handlers.ValidateSession)
 	r.GET("/session", handlers.Session)
+	r.POST("/asterisk/:pstype/:singlemulti", handlers.Asterisk)
 }
