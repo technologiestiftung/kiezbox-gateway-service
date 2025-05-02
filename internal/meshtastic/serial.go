@@ -54,6 +54,8 @@ type MTSerial struct {
 	portFactory portFactory
 	retryTime   int
 	apiPort     string
+	apiSessionDir  string
+	dbCacheDir  string
 }
 
 func interfaceIsNil(i interface{}) bool {
@@ -63,7 +65,7 @@ func interfaceIsNil(i interface{}) bool {
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory, dbcachedir string, api_sessiondir string) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -76,6 +78,8 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 	mts.portFactory = portFactory
 	mts.retryTime = retryTime
 	mts.apiPort = apiPort
+	mts.dbCacheDir = dbcachedir
+	mts.apiSessionDir = api_sessiondir
 	var err = mts.Open()
 	if err != nil {
 		fmt.Println("Serial port not available yet. Reader will retry opening it. ")
@@ -377,7 +381,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if !databaseConnected {
 				// Cache the message if database is not connected
 				fmt.Println("No database connection. Caching point.", err)
-				db.WritePointToFile(message, db.CacheDir)
+				db.WritePointToFile(message,mts.dbCacheDir)
 				continue
 			}
 
@@ -393,7 +397,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					log.Println("No connection to database, caching point.")
-					db.WritePointToFile(message, db.CacheDir)
+					db.WritePointToFile(message,mts.dbCacheDir)
 				} else {
 					log.Println("Unexpected error:", err)
 				}
@@ -404,8 +408,8 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 	}
 }
 
-// DBWriterRetry tries to write cached points to the InfluxDB instance.
-func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
+// DBRetry tries to write cached points to the InfluxDB instance.
+func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
@@ -424,7 +428,7 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 
 			if databaseConnected {
 				fmt.Println("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(db.CacheDir)
+				db_client.RetryCachedPoints(mts.dbCacheDir)
 			} else {
 				fmt.Println("No database connection. Skipping retry.", err)
 			}
