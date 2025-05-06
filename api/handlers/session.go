@@ -2,33 +2,37 @@ package handlers
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"encoding/base64"
+	"encoding/json"
 	"log"
+	"fmt"
+	mathRand "math/rand"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-
+	"path/filepath"
+	"strings"
+	"github.com/google/uuid"
 	"github.com/gin-gonic/gin"
 )
 
 // Cookie settings defaults
 const (
     defaultCookieName     = "session_token"
-    defaultCookieMaxAge   = 7200
+    defaultCookieMaxAge   = 86400
     defaultCookiePath     = "/"
     defaultCookieDomain   = ""
     defaultCookieSecure   = false
     defaultCookieHttpOnly = true
+    defaultSessionPath    = "kiezbox/local/session"
+    defaultUserPrefix     = "user"
 )
 
-// generateSessionToken creates a random session token
-func generateSessionToken() string {
-    bytes := make([]byte, 16)
-    if _, err := rand.Read(bytes); err != nil {
-        return time.Now().String()
-    }
-    return hex.EncodeToString(bytes)
+type sipSession struct {
+	Extension int64 `json:"extension"`
+	Password string `json:"password"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // getCookieSettings retrieves cookie settings from environment variables
@@ -72,6 +76,18 @@ func getCookieSettings() (name string, maxAge int, path string, domain string, s
     return
 }
 
+func generatePassword() (string, error) {
+	// Generate random bytes
+	randomBytes := make([]byte, 24)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
+	}
+	base64Password := base64.URLEncoding.EncodeToString(randomBytes)
+	return base64Password, nil
+}
+
+//TODO: update endpoint description
 // @Summary Get Session
 // @Description Returns session with session token, creating a new one only if needed
 // @Tags session
@@ -80,43 +96,164 @@ func getCookieSettings() (name string, maxAge int, path string, domain string, s
 // @Success 200 {object} map[string]interface{} "Configuration with session token"
 // @Router /session [get]
 func Session(c *gin.Context) {
-    cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
+	cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
+	files, err := os.ReadDir(defaultSessionPath)
+	if err != nil {
+		log.Fatalf("Failed to read from session directory %s: %v", defaultSessionPath, err)
+		c.String(http.StatusInternalServerError, "Failed to read from session directory %s: %v", defaultSessionPath, err)
+		return
+	}
+	method := c.Request.Method
+	log.Printf("Handling %s request",method)
+	if ( method == "GET" || method == "HEAD" || method == "DELETE") {
+		sessionToken, _ := c.Cookie(cookieName)
+		if sessionToken != "" {
+			filePath := filepath.Join(defaultSessionPath, sessionToken + ".json")
+			if ( method == "DELETE" ) {
+				log.Printf("Removing %s on user request\n", filePath)
+				err = os.Remove(filePath)
+				if err != nil {
+					log.Printf("Failed to remove session %s: %v", filePath, err)
+					c.String(http.StatusInternalServerError, "Failed to remove session:", err)
+				} else {
+					c.Status(http.StatusOK)
+				}
+				return
+			}
+			session_content, err := os.ReadFile(filePath)
+			//TODO: also check for session expiration on GET/HEAD request
+			if err != nil {
+				//INFO: giving back the session token here defeats httponly cookies, keep that in mind
+				if (method == "GET") {
+					c.String(http.StatusNotFound, "Failed to find session for token: %s", sessionToken)
+				} else {
+					c.Status(http.StatusNotFound)
+				}
+				return
+			} else {
+				if (method == "GET") {
+					c.Data(http.StatusOK, "application/json", session_content)
+					return
+				} else { //Only status code for HEAD requests
+					c.Status(http.StatusOK)
+					//TODO: HEAD request reported content legth is one off the actual length, see if this is a problem
+					c.Header("Content-Length", strconv.Itoa(len(session_content)))
+					//TODO: chack if we need some more 'manual' connection closing like
+					//c.Header("Connection", "close")
+					//c.Writer.Flush()
+					//c.Abort()
+					return
+				}
+			}
+		} else {
+			c.String(http.StatusUnauthorized, "No session token was provided")
+			return
+		}
+	} else if ( method == "POST" ) {
+		// An [int]bool map is kind of duplication, as existance of an extension can be tracked by a map without the value
+		taken := make(map[int64]bool)
+		// check for extensions already taken and clean up old sessions
+		for _, file := range files {
+			filePath := filepath.Join(defaultSessionPath, file.Name())
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				session_content, err := os.ReadFile(filePath)
+				if err != nil {
+					log.Printf("Failed to read file %s: %v", filePath, err)
+					continue
+				}
+				var session sipSession
+				err = json.Unmarshal(session_content, &session)
+				if err != nil {
+					log.Fatal("Error unmarshaling JSON:", err)
+					continue
+				}
+				// removing timed out sessions while we are at it
+				if ( time.Now().Unix() > defaultCookieMaxAge + session.Timestamp ) {
+					log.Printf("Removing %s because of timeout (%d)\n", filePath, session.Timestamp)
+					err = os.Remove(filePath)
+					continue
+				}
+				// checking if extension was already taken by another session
+				//TODO: this should not happen? but currently is possible with race condition from multiple POSTs?
+				if is_taken, exists := taken[session.Extension]; exists {
+					if is_taken {
+						log.Printf("Removing %s because extension (%d) was already taken\n", filePath, session.Extension)
+						err = os.Remove(filePath)
+						continue
+					}
+				} else {
+					taken[session.Extension] = true
+				}
+			} else {
+				log.Printf("Ignored file: %s", filePath)
+			}
+		}
+		var new_session sipSession 
+		found_free := false
+		//TODO: un-hardcode 1000 extension limit
+		offs := mathRand.Intn(1000)
+		for i := 0; i < 1000; i++ {
+			var idx int64 = int64(( offs + i ) % 1000)
+			if _, exists := taken[idx]; !exists {
+				new_session.Extension = idx
+				found_free = true
+				break
+			}
+		}
+		if found_free {
+			newSessionToken := uuid.New().String()
+			password, err := generatePassword()
+			if err != nil {
+				fmt.Println("Failed to generate secure password:", err)
+				c.String(http.StatusInternalServerError, "Failed to generate sercure Password:", err)
+				return
 
-    sessionToken, err := c.Cookie(cookieName)
+			} else {
+				new_session.Password = password
+				new_session.Timestamp = time.Now().Unix()
+				filePath := filepath.Join(defaultSessionPath, newSessionToken + ".json")
+				file, err := os.Create(filePath)
+				if err != nil {
+					fmt.Println("Error creating file:", err)
+					c.String(http.StatusInternalServerError, "Error creating file:", err)
+					return
+				}
+				defer file.Close()
+				// Writes session content to file
+				encoder := json.NewEncoder(file)
+				err = encoder.Encode(new_session)
+				if err != nil {
+					fmt.Println("Error encoding JSON:", err)
+					return
+				}
+				c.SetCookie(
+					cookieName,
+					newSessionToken,
+					cookieMaxAge,
+					cookiePath,
+					cookieDomain,
+					cookieSecure,
+					cookieHttpOnly,
+				)
+				c.JSON(http.StatusOK,new_session)
+			}
+		} else {
+			c.String(http.StatusServiceUnavailable, "No more free sessions available")
+			return
+		}
+	} else {
+			c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
+			return
+	}
+}
 
-    if sessionToken != "" {
-        log.Printf("Session token found: %s", sessionToken)
-    } else {
-        log.Println("No session token found, generating a new one.")
-    }
-
-    if err != nil || sessionToken == "" {
-        sessionToken = generateSessionToken()
-        c.SetCookie(
-            cookieName,
-            sessionToken,
-            cookieMaxAge,
-            cookiePath,
-            cookieDomain,
-            cookieSecure,
-            cookieHttpOnly,
-        )
-    }
-
-    kiezboxConfig := gin.H{
+func SIPConfig(c *gin.Context) {
+    c.JSON(http.StatusOK, gin.H{
         "kbServerAddress": os.Getenv("KB_SERVER_ADDRESS"),
         "kbWSSPort":       getIntEnv("KB_WSS_PORT", 8089),
         "kbWSSPath":       os.Getenv("KB_WSS_PATH"),
         "kbDomain":        os.Getenv("KB_DOMAIN"),
-        "kbSIPUsername":   os.Getenv("KB_SIP_USERNAME"),
-        "kbSIPPassword":   os.Getenv("KB_SIP_PASSWORD"),
-        "kbisplayName":    os.Getenv("KB_DISPLAY_NAME"),
-        "createdAt":       time.Now().Format(time.RFC3339),
-        "updatedAt":       time.Now().Format(time.RFC3339),
-    }
-
-    c.JSON(http.StatusOK, gin.H{
-        "config": kiezboxConfig,
+        "kbUserPrefix":    defaultUserPrefix,
     })
 }
 
