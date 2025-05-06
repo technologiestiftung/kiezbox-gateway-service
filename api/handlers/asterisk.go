@@ -1,13 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-        "os"
-	"path/filepath"
 	"net/http"
-	"encoding/json"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -20,23 +20,23 @@ type SipUser struct {
 	callerid string
 }
 
-func idToExt(id int64) (string) {
-    return fmt.Sprintf("%s%04d", defaultUserPrefix,id)
+func idToExt(id int64) string {
+	return fmt.Sprintf("%s%04d", defaultUserPrefix, id)
 }
 
-func idToCid(id int64) (string) {
-    //TODO: callerid can't contain spaces (or probably other special characters) currently
-    // as url.Values.Encode() encodes it like "application/x-www-form-urlencoded"
-    // but the asterisk curl backend despite documentation suggesting it does not parse this encoding correctly
-    // https://docs.asterisk.org/Configuration/Interfaces/Back-end-Database-and-Realtime-Connectivity/cURL/
-    // at least '+' chars as spaces are not decoded correctly and everything before the last '<' char is used as first part of the called id
-    return fmt.Sprintf("Emergency_%s%04d<2%d>", defaultUserPrefix,id,id)
+func idToCid(id int64) string {
+	//TODO: callerid can't contain spaces (or probably other special characters) currently
+	// as url.Values.Encode() encodes it like "application/x-www-form-urlencoded"
+	// but the asterisk curl backend despite documentation suggesting it does not parse this encoding correctly
+	// https://docs.asterisk.org/Configuration/Interfaces/Back-end-Database-and-Realtime-Connectivity/cURL/
+	// at least '+' chars as spaces are not decoded correctly and everything before the last '<' char is used as first part of the called id
+	return fmt.Sprintf("Emergency_%s%04d<2%d>", defaultUserPrefix, id, id)
 }
 
 func getSession(extension string) (*sipSession, error) {
-        files, err := os.ReadDir(defaultSessionPath)
+	files, err := os.ReadDir(defaultSessionPath)
 	if err != nil {
-                return nil, fmt.Errorf("Failed to read from session directory %s: %v", defaultSessionPath, err)
+		return nil, fmt.Errorf("Failed to read from session directory %s: %v", defaultSessionPath, err)
 	}
 	for _, file := range files {
 		filePath := filepath.Join(defaultSessionPath, file.Name())
@@ -52,51 +52,51 @@ func getSession(extension string) (*sipSession, error) {
 				log.Fatal("Error unmarshaling JSON:", err)
 				continue
 			}
-                        if(idToExt(session.Extension) == extension ) {
-                            return &session, nil
-                        }
+			if idToExt(session.Extension) == extension {
+				return &session, nil
+			}
 		}
 	}
-        return nil, fmt.Errorf("extension %s not found",extension)
+	return nil, fmt.Errorf("extension %s not found", extension)
 }
 
 func getSessions(pattern string) (*[]sipSession, error) {
-        files, err := os.ReadDir(defaultSessionPath)
+	files, err := os.ReadDir(defaultSessionPath)
 	var sessions []sipSession
 	if err != nil {
-                return nil, err
+		return nil, err
 	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-                return nil, err
+		return nil, err
 	} else {
 		found := false
-                for _, file := range files {
-                        filePath := filepath.Join(defaultSessionPath, file.Name())
-                        if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-                                session_content, err := os.ReadFile(filePath)
-                                if err != nil {
-                                        log.Printf("Failed to read file %s: %v", filePath, err)
-                                        continue
-                                }
-                                var session sipSession
-                                err = json.Unmarshal(session_content, &session)
-                                if err != nil {
-                                        log.Fatal("Error unmarshaling JSON:", err)
-                                        continue
-                                }
-                                if re.MatchString(fmt.Sprintf("%s%04d", defaultUserPrefix ,session.Extension)) {
-                                    found = true
-                                    sessions = append(sessions,session)
-                                }
-                        }
-	        }
+		for _, file := range files {
+			filePath := filepath.Join(defaultSessionPath, file.Name())
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				session_content, err := os.ReadFile(filePath)
+				if err != nil {
+					log.Printf("Failed to read file %s: %v", filePath, err)
+					continue
+				}
+				var session sipSession
+				err = json.Unmarshal(session_content, &session)
+				if err != nil {
+					log.Fatal("Error unmarshaling JSON:", err)
+					continue
+				}
+				if re.MatchString(fmt.Sprintf("%s%04d", defaultUserPrefix, session.Extension)) {
+					found = true
+					sessions = append(sessions, session)
+				}
+			}
+		}
 		if found {
-                    return &sessions, nil
+			return &sessions, nil
 		} else {
-                    return nil, fmt.Errorf("no session found matching pattern %s",pattern)
-                }
-        }
+			return nil, fmt.Errorf("no session found matching pattern %s", pattern)
+		}
+	}
 }
 
 func Asterisk(c *gin.Context) {
@@ -134,14 +134,14 @@ func Asterisk(c *gin.Context) {
 	if is_single {
 		id, found := c.GetPostForm("id")
 		if found {
-                    session, err := getSession(id)
-                    if err == nil {
-                        sessions = append(sessions,*session)
-		    } else {
-			log.Printf("ID %s not found", id)
-			c.String(http.StatusNotFound, "ID %s not found", id)
-			return
-		    }
+			session, err := getSession(id)
+			if err == nil {
+				sessions = append(sessions, *session)
+			} else {
+				log.Printf("ID %s not found", id)
+				c.String(http.StatusNotFound, "ID %s not found", id)
+				return
+			}
 		} else {
 			log.Printf("Parameter `id` not set")
 			c.String(http.StatusBadRequest, "Parameter `id` not set")
@@ -152,13 +152,13 @@ func Asterisk(c *gin.Context) {
 		idLike, found := c.GetPostForm("id LIKE")
 		if found {
 			idLikeRegex := "^" + strings.ReplaceAll(strings.ReplaceAll(idLike, "%", ".*"), "_", ".") + "$"
-                        matched_sessions, err := getSessions(idLikeRegex)
-                        if err == nil {
-                                sessions = append(sessions,*matched_sessions...)
-                        } else {
+			matched_sessions, err := getSessions(idLikeRegex)
+			if err == nil {
+				sessions = append(sessions, *matched_sessions...)
+			} else {
 				log.Printf("ID LIKE %s converted to %s but not found", idLike, idLikeRegex)
-                                c.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
-                                return
+				c.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
+				return
 			}
 		} else {
 			log.Printf("Parameter `id LIKE` not set")
@@ -173,9 +173,9 @@ func Asterisk(c *gin.Context) {
 	fmt.Println("Requested sessions: ", sessions)
 	var responseBody strings.Builder
 	for _, s := range sessions {
-                ext := idToExt(s.Extension)
-                cid := idToCid(s.Extension)
-                fmt.Printf("Requested Extension: %s with Callerid: %s\n", ext, cid)
+		ext := idToExt(s.Extension)
+		cid := idToCid(s.Extension)
+		fmt.Printf("Requested Extension: %s with Callerid: %s\n", ext, cid)
 		switch c.Param("pstype") {
 		case "ps_endpoint":
 			endpoint := url.Values{}
@@ -186,7 +186,7 @@ func Asterisk(c *gin.Context) {
 				endpoint.Add(key, value)
 			}
 			endpoint.Add("callerid", cid)
-                        fmt.Printf("Edpoint response: %s",endpoint.Encode())
+			fmt.Printf("Edpoint response: %s", endpoint.Encode())
 			responseBody.WriteString(endpoint.Encode() + "\n")
 		case "ps_auth":
 			endpoint := url.Values{}
@@ -211,6 +211,6 @@ func Asterisk(c *gin.Context) {
 			return
 		}
 	}
-	c.Data(http.StatusOK, "application/x-www-form-urlencoded" , []byte(responseBody.String()))
+	c.Data(http.StatusOK, "application/x-www-form-urlencoded", []byte(responseBody.String()))
 	return
 }

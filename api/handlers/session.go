@@ -4,76 +4,76 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"log"
 	mathRand "math/rand"
 	"net/http"
 	"os"
-	"strconv"
-	"time"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"github.com/google/uuid"
-	"github.com/gin-gonic/gin"
+	"time"
 )
 
 // Cookie settings defaults
 const (
-    defaultCookieName     = "session_token"
-    defaultCookieMaxAge   = 86400
-    defaultCookiePath     = "/"
-    defaultCookieDomain   = ""
-    defaultCookieSecure   = false
-    defaultCookieHttpOnly = true
-    defaultSessionPath    = "kiezbox/local/session"
-    defaultUserPrefix     = "user"
+	defaultCookieName     = "session_token"
+	defaultCookieMaxAge   = 86400
+	defaultCookiePath     = "/"
+	defaultCookieDomain   = ""
+	defaultCookieSecure   = false
+	defaultCookieHttpOnly = true
+	defaultSessionPath    = "kiezbox/local/session"
+	defaultUserPrefix     = "user"
 )
 
 type sipSession struct {
-	Extension int64 `json:"extension"`
-	Password string `json:"password"`
-	Timestamp int64 `json:"timestamp"`
+	Extension int64  `json:"extension"`
+	Password  string `json:"password"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // getCookieSettings retrieves cookie settings from environment variables
 func getCookieSettings() (name string, maxAge int, path string, domain string, secure bool, httpOnly bool) {
-    name = os.Getenv("COOKIE_NAME")
-    if name == "" {
-        name = defaultCookieName
-    }
+	name = os.Getenv("COOKIE_NAME")
+	if name == "" {
+		name = defaultCookieName
+	}
 
-    maxAgeStr := os.Getenv("COOKIE_MAX_AGE")
-    maxAge = defaultCookieMaxAge
-    if maxAgeStr != "" {
-        if val, err := strconv.Atoi(maxAgeStr); err == nil {
-            maxAge = val
-        }
-    }
+	maxAgeStr := os.Getenv("COOKIE_MAX_AGE")
+	maxAge = defaultCookieMaxAge
+	if maxAgeStr != "" {
+		if val, err := strconv.Atoi(maxAgeStr); err == nil {
+			maxAge = val
+		}
+	}
 
-    path = os.Getenv("COOKIE_PATH")
-    if path == "" {
-        path = defaultCookiePath
-    }
+	path = os.Getenv("COOKIE_PATH")
+	if path == "" {
+		path = defaultCookiePath
+	}
 
-    domain = os.Getenv("COOKIE_DOMAIN")
-    if domain == "" {
-        domain = defaultCookieDomain
-    }
+	domain = os.Getenv("COOKIE_DOMAIN")
+	if domain == "" {
+		domain = defaultCookieDomain
+	}
 
-    secureStr := os.Getenv("COOKIE_SECURE")
-    secure = defaultCookieSecure
-    if secureStr == "true" || secureStr == "1" {
-        secure = true
-    }
+	secureStr := os.Getenv("COOKIE_SECURE")
+	secure = defaultCookieSecure
+	if secureStr == "true" || secureStr == "1" {
+		secure = true
+	}
 
-    // Get cookie httpOnly flag from env or use default
-    httpOnlyStr := os.Getenv("COOKIE_HTTP_ONLY")
-    httpOnly = defaultCookieHttpOnly
-    if httpOnlyStr == "false" || httpOnlyStr == "0" {
-        httpOnly = false
-    }
+	// Get cookie httpOnly flag from env or use default
+	httpOnlyStr := os.Getenv("COOKIE_HTTP_ONLY")
+	httpOnly = defaultCookieHttpOnly
+	if httpOnlyStr == "false" || httpOnlyStr == "0" {
+		httpOnly = false
+	}
 
-    return
+	return
 }
 
 func generatePassword() (string, error) {
@@ -87,7 +87,7 @@ func generatePassword() (string, error) {
 	return base64Password, nil
 }
 
-//TODO: update endpoint description
+// TODO: update endpoint description
 // @Summary Get Session
 // @Description Returns session with session token, creating a new one only if needed
 // @Tags session
@@ -104,12 +104,12 @@ func Session(c *gin.Context) {
 		return
 	}
 	method := c.Request.Method
-	log.Printf("Handling %s request",method)
-	if ( method == "GET" || method == "HEAD" || method == "DELETE") {
+	log.Printf("Handling %s request", method)
+	if method == "GET" || method == "HEAD" || method == "DELETE" {
 		sessionToken, _ := c.Cookie(cookieName)
 		if sessionToken != "" {
-			filePath := filepath.Join(defaultSessionPath, sessionToken + ".json")
-			if ( method == "DELETE" ) {
+			filePath := filepath.Join(defaultSessionPath, sessionToken+".json")
+			if method == "DELETE" {
 				log.Printf("Removing %s on user request\n", filePath)
 				err = os.Remove(filePath)
 				if err != nil {
@@ -124,14 +124,14 @@ func Session(c *gin.Context) {
 			//TODO: also check for session expiration on GET/HEAD request
 			if err != nil {
 				//INFO: giving back the session token here defeats httponly cookies, keep that in mind
-				if (method == "GET") {
+				if method == "GET" {
 					c.String(http.StatusNotFound, "Failed to find session for token: %s", sessionToken)
 				} else {
 					c.Status(http.StatusNotFound)
 				}
 				return
 			} else {
-				if (method == "GET") {
+				if method == "GET" {
 					c.Data(http.StatusOK, "application/json", session_content)
 					return
 				} else { //Only status code for HEAD requests
@@ -149,7 +149,7 @@ func Session(c *gin.Context) {
 			c.String(http.StatusUnauthorized, "No session token was provided")
 			return
 		}
-	} else if ( method == "POST" ) {
+	} else if method == "POST" {
 		// An [int]bool map is kind of duplication, as existance of an extension can be tracked by a map without the value
 		taken := make(map[int64]bool)
 		// check for extensions already taken and clean up old sessions
@@ -168,7 +168,7 @@ func Session(c *gin.Context) {
 					continue
 				}
 				// removing timed out sessions while we are at it
-				if ( time.Now().Unix() > defaultCookieMaxAge + session.Timestamp ) {
+				if time.Now().Unix() > defaultCookieMaxAge+session.Timestamp {
 					log.Printf("Removing %s because of timeout (%d)\n", filePath, session.Timestamp)
 					err = os.Remove(filePath)
 					continue
@@ -188,12 +188,12 @@ func Session(c *gin.Context) {
 				log.Printf("Ignored file: %s", filePath)
 			}
 		}
-		var new_session sipSession 
+		var new_session sipSession
 		found_free := false
 		//TODO: un-hardcode 1000 extension limit
 		offs := mathRand.Intn(1000)
 		for i := 0; i < 1000; i++ {
-			var idx int64 = int64(( offs + i ) % 1000)
+			var idx int64 = int64((offs + i) % 1000)
 			if _, exists := taken[idx]; !exists {
 				new_session.Extension = idx
 				found_free = true
@@ -211,7 +211,7 @@ func Session(c *gin.Context) {
 			} else {
 				new_session.Password = password
 				new_session.Timestamp = time.Now().Unix()
-				filePath := filepath.Join(defaultSessionPath, newSessionToken + ".json")
+				filePath := filepath.Join(defaultSessionPath, newSessionToken+".json")
 				file, err := os.Create(filePath)
 				if err != nil {
 					fmt.Println("Error creating file:", err)
@@ -235,37 +235,37 @@ func Session(c *gin.Context) {
 					cookieSecure,
 					cookieHttpOnly,
 				)
-				c.JSON(http.StatusOK,new_session)
+				c.JSON(http.StatusOK, new_session)
 			}
 		} else {
 			c.String(http.StatusServiceUnavailable, "No more free sessions available")
 			return
 		}
 	} else {
-			c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
-			return
+		c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
+		return
 	}
 }
 
 func SIPConfig(c *gin.Context) {
-    c.JSON(http.StatusOK, gin.H{
-        "kbServerAddress": os.Getenv("KB_SERVER_ADDRESS"),
-        "kbWSSPort":       getIntEnv("KB_WSS_PORT", 8089),
-        "kbWSSPath":       os.Getenv("KB_WSS_PATH"),
-        "kbDomain":        os.Getenv("KB_DOMAIN"),
-        "kbUserPrefix":    defaultUserPrefix,
-    })
+	c.JSON(http.StatusOK, gin.H{
+		"kbServerAddress": os.Getenv("KB_SERVER_ADDRESS"),
+		"kbWSSPort":       getIntEnv("KB_WSS_PORT", 8089),
+		"kbWSSPath":       os.Getenv("KB_WSS_PATH"),
+		"kbDomain":        os.Getenv("KB_DOMAIN"),
+		"kbUserPrefix":    defaultUserPrefix,
+	})
 }
 
 // Helper function to get integer environment variables with fallback
 func getIntEnv(key string, fallback int) int {
-    value := os.Getenv(key)
-    if value == "" {
-        return fallback
-    }
-    intValue, err := strconv.Atoi(value)
-    if err != nil {
-        return fallback
-    }
-    return intValue
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	intValue, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return intValue
 }
