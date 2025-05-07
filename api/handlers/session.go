@@ -87,14 +87,24 @@ func generatePassword() (string, error) {
 	return base64Password, nil
 }
 
-// TODO: update endpoint description
-// @Summary Get Session
-// @Description Returns session with session token, creating a new one only if needed
-// @Tags session
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]interface{} "Configuration with session token"
-// @Router /session [get]
+// Session handles requests related to user sessions.
+// The behavior of the function depends on the HTTP method used:
+// - `GET` and `HEAD`:
+//   - Retrieves session information if a valid session token is provided in the cookie.
+//   - For `GET`, it returns the session data as JSON.
+//   - For `HEAD`, it returns only the status code (can be used to validate if a session is still valid)
+//   - Returns a 401 Unauthorized if no session token is provided or a 404 Not Found if the session cannot be found.
+// - `DELETE`:
+//   - Deletes the session file associated with the provided cookie/token.
+//   - Returns a 200 OK if the session is successfully deleted or a 500 Internal Server Error if the deletion fails.
+// - `POST`:
+//   - Creates a new session, generates a unique session token, and stores it
+//   - This method will clean up the old session if a valid session cookie is provided with the request
+//   - Ensures that extensions used in the session are unique, cleaning up expired sessions and checking for conflicts.
+//   - Returns a 200 OK with the new session information if successful or a 503 Service Unavailable if no free sessions are available.
+// - Other HTTP methods:
+//   - Returns a 405 Method Not Allowed if the method is not supported.
+// TODO: Adapt this to be 'real' openAPI doc?
 func Session(c *gin.Context) {
 	cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
 	files, err := os.ReadDir(defaultSessionPath)
@@ -105,21 +115,28 @@ func Session(c *gin.Context) {
 	}
 	method := c.Request.Method
 	log.Printf("Handling %s request", method)
-	if method == "GET" || method == "HEAD" || method == "DELETE" {
-		sessionToken, _ := c.Cookie(cookieName)
-		if sessionToken != "" {
-			filePath := filepath.Join(defaultSessionPath, sessionToken+".json")
+	if ! ( method == "GET" || method == "HEAD" || method == "DELETE" || method == "POST" ) {
+		c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
+		return
+	}
+	sessionToken, _ := c.Cookie(cookieName)
+	if sessionToken != "" {
+		filePath := filepath.Join(defaultSessionPath, filepath.Clean(sessionToken) + ".json")
+		// Delete (old) session on DELETE or when the user is requesting a new one via POST
+		if method == "DELETE" || method == "POST" {
+			log.Printf("Removing %s because of %s\n", filePath, method)
+			err = os.Remove(filePath)
 			if method == "DELETE" {
-				log.Printf("Removing %s on user request\n", filePath)
-				err = os.Remove(filePath)
 				if err != nil {
 					log.Printf("Failed to remove session %s: %v", filePath, err)
+					//INFO: giving back the session token here (as part of the error message) defeats httponly cookies, keep that in mind
 					c.String(http.StatusInternalServerError, "Failed to remove session:", err)
 				} else {
 					c.Status(http.StatusOK)
 				}
 				return
 			}
+		} else { // Retrieve sessions on GET or HEAD
 			session_content, err := os.ReadFile(filePath)
 			//TODO: also check for session expiration on GET/HEAD request
 			if err != nil {
@@ -145,11 +162,12 @@ func Session(c *gin.Context) {
 					return
 				}
 			}
-		} else {
-			c.String(http.StatusUnauthorized, "No session token was provided")
-			return
 		}
-	} else if method == "POST" {
+	} else if method != "POST" {
+		c.String(http.StatusUnauthorized, "No session token was provided")
+		return
+	}
+	if method == "POST" {
 		// An [int]bool map is kind of duplication, as existance of an extension can be tracked by a map without the value
 		taken := make(map[int64]bool)
 		// check for extensions already taken and clean up old sessions
@@ -241,12 +259,11 @@ func Session(c *gin.Context) {
 			c.String(http.StatusServiceUnavailable, "No more free sessions available")
 			return
 		}
-	} else {
-		c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
-		return
 	}
 }
 
+//TODO: move environment variables to some global state
+// and maybe have them retrieved from some central system/uci config
 func SIPConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"kbServerAddress": os.Getenv("KB_SERVER_ADDRESS"),
