@@ -18,8 +18,6 @@ import (
 	"kiezbox/internal/marshal"
 )
 
-const CacheDir = "kiezbox/internal/cached"
-
 // WritePointToDatabase writes an InfluxDB point to the InfluxDB bucket
 func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	// Set a timeout

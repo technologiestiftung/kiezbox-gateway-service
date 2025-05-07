@@ -10,12 +10,18 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"net/http"
+	"reflect"
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 
+	"kiezbox/api/routes"
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
@@ -47,12 +53,19 @@ type MTSerial struct {
 	WaitInfo    sync.WaitGroup
 	portFactory portFactory
 	retryTime   int
+	apiPort     string
+	apiSessionDir  string
+	dbCacheDir  string
+}
+
+func interfaceIsNil(i interface{}) bool {
+    return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portFactory) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory, dbcachedir string, api_sessiondir string) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -64,14 +77,12 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portF
 	}
 	mts.portFactory = portFactory
 	mts.retryTime = retryTime
-	for {
-		var err = mts.Open()
-		if err == nil {
-			break
-		} else {
-			fmt.Println("Waiting for serial Port to become available...")
-			time.Sleep(time.Second * 3)
-		}
+	mts.apiPort = apiPort
+	mts.dbCacheDir = dbcachedir
+	mts.apiSessionDir = api_sessiondir
+	var err = mts.Open()
+	if err != nil {
+		fmt.Println("Serial port not available yet. Reader will retry opening it. ")
 	}
 }
 
@@ -201,10 +212,6 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
-	if mts.port == nil {
-		fmt.Println("Serial port not initialized")
-		return
-	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -235,7 +242,7 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 			// Debug output
 			fmt.Printf("Sending packet (Hex): %x\n", packet)
 			// Write the packet to the serial port
-			if mts.port != nil {
+			if !interfaceIsNil(mts.port) {
 				_, err = mts.port.Write(packet)
 				if err != nil {
 					fmt.Println("failed to write to serial port: %w", err)
@@ -257,11 +264,6 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 	var buffer bytes.Buffer
 	var debugBuffer bytes.Buffer
 
-	if mts.port == nil {
-		fmt.Println("Serial port not initialized")
-		return
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -270,10 +272,19 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 		default:
 			// Read one byte at a time from the serial port.
 			byteBuf := make([]byte, 1)
-			_, err := mts.port.Read(byteBuf)
-			if err != nil {
-				fmt.Printf("Error reading from serial port: %v\n", err)
-				mts.Close()
+			var portbroken bool = false
+			if interfaceIsNil(mts.port) {
+				fmt.Println("Serial port is not initialized:", mts.port)
+				portbroken = true
+			} else {
+				_, err := mts.port.Read(byteBuf)
+				if err != nil {
+					fmt.Printf("Error reading from serial port: %v\n", err)
+					portbroken = true
+					mts.Close()
+				}
+			}
+			if portbroken {
 				for {
 					fmt.Println("Waiting for device to reconnect...")
 					var err = mts.Open()
@@ -370,7 +381,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if !databaseConnected {
 				// Cache the message if database is not connected
 				fmt.Println("No database connection. Caching point.", err)
-				db.WritePointToFile(message, db.CacheDir)
+				db.WritePointToFile(message,mts.dbCacheDir)
 				continue
 			}
 
@@ -386,7 +397,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					log.Println("No connection to database, caching point.")
-					db.WritePointToFile(message, db.CacheDir)
+					db.WritePointToFile(message,mts.dbCacheDir)
 				} else {
 					log.Println("Unexpected error:", err)
 				}
@@ -397,12 +408,12 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 	}
 }
 
-// DBWriterRetry tries to write cached points to the InfluxDB instance.
-func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
+// DBRetry tries to write cached points to the InfluxDB instance.
+func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
-	// Do retry every 10 seconds
+	// Do retry every mts.retryTime seconds
 	ticker := time.NewTicker(time.Duration(mts.retryTime) * time.Second)
 	defer ticker.Stop()
 
@@ -417,10 +428,43 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 
 			if databaseConnected {
 				fmt.Println("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(db.CacheDir)
+				db_client.RetryCachedPoints(mts.dbCacheDir)
 			} else {
 				fmt.Println("No database connection. Skipping retry.", err)
 			}
 		}
+	}
+}
+
+// APIHandler starts the API for the Kiezbox Gateway Service.
+func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	// Create a new Gin router
+	r := gin.Default()
+
+	// Register API routes
+	routes.RegisterRoutes(r)
+
+	// Serve Swagger UI at /swagger
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Configure the HTTP server
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%s", mts.apiPort),
+		Handler: r,
+	}
+
+	// Start the HTTP server
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Failed to start API server: %v", err)
+	}
+
+	// Handle context cancellation and server shutdown
+	<-ctx.Done()
+	fmt.Println("Shutting down API server...")
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("API server forced to shut down: %v", err)
 	}
 }
