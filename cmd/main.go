@@ -67,14 +67,14 @@ func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
 	flag_dbwriter := flag.Bool("dbwriter", false, "Tells the service to run the dbwriter routine")
 	flag_dbretry := flag.Bool("dbretry", false, "Tells the service to run the dbretry routine")
-	flag_dbcachedir := flag.String("dbcachedir", "kiezbox/internal/cached", "Path of the directory used for caching database points")
+	flag_dbcachedir := flag.String("dbcachedir", ".kb-dbcache", "Path of the directory used for caching database points")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
-	flag_timeout := flag.Int("timeout", 1, "Database timeout in seconds")
-	flag_api_port := flag.String("api_port", "8080", "API port")
-	flag_api_sessiondir := flag.String("api_sessiondir", "kiezbox/internal/sessions", "Path of the directory used for storing web client sessions")
+	flag_timeout := flag.Int("timeout", 3, "Database timeout in seconds")
+	flag_api_port := flag.String("api_port", "9080", "API port")
+	flag_api_sessiondir := flag.String("api_sessiondir", ".kb-session", "Path of the directory used for storing web client sessions")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {

@@ -67,7 +67,7 @@ swag init --output ./api/docs --dir ./cmd
 To access the Swagger documentation, go to:
 
 ```
-http://localhost:8080/swagger/index.html
+http://localhost:9080/swagger/index.html
 ```
 
 To run the API:

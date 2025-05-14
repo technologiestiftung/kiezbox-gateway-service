@@ -25,7 +25,7 @@ const (
 	defaultCookieDomain   = ""
 	defaultCookieSecure   = false
 	defaultCookieHttpOnly = true
-	defaultSessionPath    = "kiezbox/local/session"
+	defaultSessionPath    = ".kb-session"
 	defaultUserPrefix     = "user"
 )
 
