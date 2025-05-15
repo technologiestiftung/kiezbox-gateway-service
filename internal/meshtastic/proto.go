@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ExtractKBMessage takes a FromRadio protobuf message and extracts a KiezboxMessage if possible
-// It returns the containing KiezboxMessage or nil otherwise
+// MessageHandler takes a FromRadio protobuf KiezboxMessage or AdminMessage and extracts it if possible
+// It returns the containing message or nil otherwise
 func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
@@ -34,7 +34,9 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 			case *generated.FromRadio_Packet:
 				switch v := v.Packet.PayloadVariant.(type) {
 				case *generated.MeshPacket_Decoded:
+					// Extract the message according to its type
 					switch v.Decoded.Portnum {
+					// Extract KiezboxMessage
 					case generated.PortNum_KIEZBOX_CONTROL_APP:
 						var KiezboxMessage generated.KiezboxMessage
 						err := proto.Unmarshal(v.Decoded.Payload, &KiezboxMessage)
@@ -45,7 +47,7 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 							debugPrintProtobuf(&KiezboxMessage)
 							mts.KBChan <- &KiezboxMessage
 						}
-					// WIP from here
+					// Extract AdminMessage
 					case generated.PortNum_ADMIN_APP:
 						var AdminMessage generated.AdminMessage
 						err := proto.Unmarshal(v.Decoded.Payload, &AdminMessage)
@@ -54,9 +56,8 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 						} else {
 							fmt.Println("Sucessfully extracted AdminMessage:")
 							debugPrintProtobuf(&AdminMessage)
-							// TODO: Handle config response and send to the appropriate channel
+							mts.AdminChan <- &AdminMessage
 						}
-					// WIP to here
 					default:
 						fmt.Println("Payload variant not an accepted type of message")
 					}

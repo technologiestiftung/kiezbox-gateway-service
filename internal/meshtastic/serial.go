@@ -43,6 +43,7 @@ type MTSerial struct {
 	ToChan      chan *generated.ToRadio
 	FromChan    chan *generated.FromRadio
 	KBChan      chan *generated.KiezboxMessage
+	AdminChan   chan *generated.AdminMessage
 	MyInfo      *generated.MyNodeInfo
 	WaitInfo    sync.WaitGroup
 	portFactory portFactory
@@ -56,6 +57,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portF
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
+	mts.AdminChan = make(chan *generated.AdminMessage, 10)
 	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
@@ -425,7 +427,6 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 	}
 }
 
-// WIP from here
 // GetConfig sends a request to the meshtastic device to get the current configuration
 func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup) {
 	mts.WaitInfo.Wait()
@@ -445,7 +446,27 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup) {
 		fmt.Printf("Failed to marshal AdminMessage: %v", err)
 	}
 
-	// TODO: Prepare adminData to send to appropriate channel
+	// Create the Data message
+	dataMessage := &generated.Data{
+		Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
+		Payload: adminData,
+	}
+
+	// Create the MeshPacket
+	meshPacket := &generated.MeshPacket{
+		From:    0, //TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
+		Channel: 2, //TODO: get Channel dynamically
+		PayloadVariant: &generated.MeshPacket_Decoded{
+			Decoded: dataMessage,
+		},
+	}
+	// Create the ToRadio message
+	toRadio := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_Packet{
+			Packet: meshPacket,
+		},
+	}
 
 	fmt.Printf("Sending config request")
 
@@ -455,10 +476,8 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup) {
 		return
 	default:
 		// Send the message
-		mts.Write(toRadio) // TODO: Is this the channel we want to use?
+		mts.Write(toRadio)
 	}
 
 	return
 }
-
-// WIP to here
