@@ -20,6 +20,19 @@ Then run this command tu generate the Go code based on the protobuf.
 protoc -I=protobufs/ --go_out=internal protobufs/meshtastic/*.proto protobufs/nanopb.proto
 ```
 
+## Build
+
+Because we also build this for OpenWrt (23.05), we only have go in version 1.21.13 available.
+To install and use go in the correct version:
+
+```
+go install golang.org/dl/go1.21.13@latest
+~/go/bin/go1.21.13 download
+```
+
+Executing go should now always be done like this `~/go/bin/go1.21.13 version` instead of like this `go version`.
+Executing `go mod tidy` e.g. may break the dependecies for the OpenWrt build if you system go is not in the right version.
+
 Create a kiezbox module.
 
 ```

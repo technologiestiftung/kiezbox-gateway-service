@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"math/rand/v2"
+	"math/rand"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,7 +15,7 @@ import (
 // @Router /mode [get]
 func Mode(c *gin.Context) {
 	// random number for demonstration purposes 1-3
-	mode := rand.IntN(3)
+	mode := rand.Intn(3)
 	c.JSON(http.StatusOK, gin.H{
 		"mode": mode, // e.g., "normal", "maintenance"
 	})
