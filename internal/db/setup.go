@@ -26,7 +26,7 @@ func CreateClient(url, token, org, bucket string, timeout int) *InfluxDB {
 	// Check if the client is working
 	_, err := client.Health(context.Background())
 	if err != nil {
-		log.Fatalf("Error connecting to InfluxDB: %v", err)
+		log.Printf("Error connecting to InfluxDB: %v", err)
 	}
 
 	// Initialize WriteAPI and QueryAPI once
