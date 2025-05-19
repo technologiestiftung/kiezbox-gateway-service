@@ -71,20 +71,14 @@ go tool cover -html=coverage.out
 
 ## API
 
-To update the API Swagger documentation (e.g., after adding new routes, modifying handlers or chaning Swagger metadata), run the following command from the root. This is the same as running `swag init` from the `api` directory:
-
-```
-swag init --output ./api/docs --dir ./cmd
-```
-
-To access the Swagger documentation, go to:
-
-```
-http://localhost:9080/swagger/index.html
-```
-
 To run the API:
 
 ```
 go run cmd/main.go
+```
+
+You can send API requests using cURL:
+
+```
+curl -X GET http://localhost:9080/mode
 ```

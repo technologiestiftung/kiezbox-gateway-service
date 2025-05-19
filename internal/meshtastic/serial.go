@@ -16,8 +16,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 
@@ -43,29 +41,29 @@ type portFactory func(*serial.Config) (SerialPort, error)
 
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
-	conf        *serial.Config
-	port        SerialPort
-	config_id   uint32
-	ToChan      chan *generated.ToRadio
-	FromChan    chan *generated.FromRadio
-	KBChan      chan *generated.KiezboxMessage
-	MyInfo      *generated.MyNodeInfo
-	WaitInfo    sync.WaitGroup
-	portFactory portFactory
-	retryTime   int
-	apiPort     string
-	apiSessionDir  string
-	dbCacheDir  string
+	conf          *serial.Config
+	port          SerialPort
+	config_id     uint32
+	ToChan        chan *generated.ToRadio
+	FromChan      chan *generated.FromRadio
+	KBChan        chan *generated.KiezboxMessage
+	MyInfo        *generated.MyNodeInfo
+	WaitInfo      sync.WaitGroup
+	portFactory   portFactory
+	retryTime     int
+	apiPort       string
+	cacheDir      string
+	apiSessionDir string
 }
 
 func interfaceIsNil(i interface{}) bool {
-    return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
+	return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
 }
 
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory, dbcachedir string, api_sessiondir string) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory, cacheDir string, api_sessiondir string) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -78,7 +76,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 	mts.portFactory = portFactory
 	mts.retryTime = retryTime
 	mts.apiPort = apiPort
-	mts.dbCacheDir = dbcachedir
+	mts.cacheDir = cacheDir
 	mts.apiSessionDir = api_sessiondir
 	var err = mts.Open()
 	if err != nil {
@@ -381,7 +379,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if !databaseConnected {
 				// Cache the message if database is not connected
 				fmt.Println("No database connection. Caching point.", err)
-				db.WritePointToFile(message,mts.dbCacheDir)
+				db.WritePointToFile(message, mts.cacheDir)
 				continue
 			}
 
@@ -397,7 +395,8 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					log.Println("No connection to database, caching point.")
-					db.WritePointToFile(message,mts.dbCacheDir)
+					db.WritePointToFile(message, mts.cacheDir)
+
 				} else {
 					log.Println("Unexpected error:", err)
 				}
@@ -428,7 +427,8 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 
 			if databaseConnected {
 				fmt.Println("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(mts.dbCacheDir)
+				db_client.RetryCachedPoints(mts.cacheDir)
+
 			} else {
 				fmt.Println("No database connection. Skipping retry.", err)
 			}
@@ -446,9 +446,6 @@ func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Register API routes
 	routes.RegisterRoutes(r)
-
-	// Serve Swagger UI at /swagger
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Configure the HTTP server
 	server := &http.Server{
