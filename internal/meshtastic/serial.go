@@ -435,8 +435,8 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Create the Admin message
 	adminMessage := &generated.AdminMessage{
-		PayloadVariant: &generated.AdminMessage_GetConfigRequest{
-			GetConfigRequest: generated.AdminMessage_DEVICE_CONFIG, // TODO: Is this the config type we want to use?
+		PayloadVariant: &generated.AdminMessage_GetModuleConfigRequest{
+			GetModuleConfigRequest: generated.AdminMessage_KIEZBOXCONTROL_CONFIG,
 		},
 	}
 
