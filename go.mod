@@ -1,6 +1,6 @@
 module kiezbox
 
-go 1.24.1
+go 1.21
 
 require (
 	github.com/gin-gonic/gin v1.10.0
@@ -9,7 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.10.0
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
