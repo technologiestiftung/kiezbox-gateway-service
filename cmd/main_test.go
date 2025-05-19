@@ -58,7 +58,7 @@ func (m *MockMTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_clie
 	wg.Done()
 }
 
-func (m *MockMTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
+func (m *MockMTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB) {
 	m.Called(ctx, wg)
 	wg.Done()
 }
@@ -84,7 +84,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.On("Reader", mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("MessageHandler", mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("DBWriter", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	mockMTSerial.On("DBWriterRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("DBRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("Settime", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything).Return(nil)
 
@@ -94,11 +94,12 @@ func TestRunGoroutines(t *testing.T) {
 
 	flag_settime := true
 	flag_dbwriter := true
+	flag_dbretry := true
 	db_client := &db.InfluxDB{} // Mocked or a real one if needed
 
 	// Initialize with a mock serial port
 	var mts meshtastic.MTSerial
-	mts.Init("/dev/mockTTYUSB0", 115200, 10, "8000", portFactory, "internal/cached")
+	mts.Init("/dev/mockTTYUSB0", 115200, 10, "8000", portFactory, "internal/cached", ".kb-session")
 
 	// Create a context with cancel
 	ctx, cancel := context.WithCancel(context.Background())
@@ -107,7 +108,7 @@ func TestRunGoroutines(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Run the function under test
-	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_dbwriter, db_client)
+	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_dbwriter, flag_dbretry, db_client)
 
 	// Cancel the context after a small interval
 	time.Sleep(time.Millisecond * 1)
@@ -119,7 +120,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "Reader", mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "MessageHandler", mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBWriter", mock.Anything, mock.Anything, mock.Anything)
-	mockMTSerial.AssertCalled(t, "DBWriterRetry", mock.Anything, mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "DBRetry", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "Settime", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything)
 
