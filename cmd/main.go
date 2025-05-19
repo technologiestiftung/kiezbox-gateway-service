@@ -71,7 +71,7 @@ func main() {
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
 	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
-	flag_cache_dir := flag.String("cache_dir", "internal/cached", "Directory for caching points")
+	flag_cache_dir := flag.String("cache_dir", ".kb-dbcache", "Directory for caching points")
 	flag_timeout := flag.Int("timeout", 3, "Database timeout in seconds")
 	flag_api_port := flag.String("api_port", "9080", "API port")
 	flag_api_sessiondir := flag.String("api_sessiondir", ".kb-session", "Path of the directory used for storing web client sessions")
