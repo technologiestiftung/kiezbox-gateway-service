@@ -16,8 +16,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 
@@ -57,7 +55,7 @@ type MTSerial struct {
 }
 
 func interfaceIsNil(i interface{}) bool {
-    return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
+	return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
 }
 
 // Init initializes the serial device of an MTSerial object
@@ -442,9 +440,6 @@ func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Register API routes
 	routes.RegisterRoutes(r)
-
-	// Serve Swagger UI at /swagger
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Configure the HTTP server
 	server := &http.Server{
