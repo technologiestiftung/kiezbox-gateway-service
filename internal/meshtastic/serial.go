@@ -43,7 +43,7 @@ type MTSerial struct {
 	ToChan      chan *generated.ToRadio
 	FromChan    chan *generated.FromRadio
 	KBChan      chan *generated.KiezboxMessage
-	AdminChan   chan *generated.AdminMessage
+	ConfigChan  chan *generated.AdminMessage
 	MyInfo      *generated.MyNodeInfo
 	WaitInfo    sync.WaitGroup
 	portFactory portFactory
@@ -57,7 +57,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, portFactory portF
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
-	mts.AdminChan = make(chan *generated.AdminMessage, 10)
+	mts.ConfigChan = make(chan *generated.AdminMessage, 10)
 	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{

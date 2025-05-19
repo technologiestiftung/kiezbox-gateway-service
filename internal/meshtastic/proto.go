@@ -56,7 +56,7 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 						} else {
 							fmt.Println("Sucessfully extracted AdminMessage:")
 							debugPrintProtobuf(&AdminMessage)
-							mts.AdminChan <- &AdminMessage
+							mts.ConfigChan <- &AdminMessage
 						}
 					default:
 						fmt.Println("Payload variant not an accepted type of message")
