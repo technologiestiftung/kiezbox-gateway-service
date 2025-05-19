@@ -67,7 +67,6 @@ func main() {
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
 	flag_dbwriter := flag.Bool("dbwriter", false, "Tells the service to run the dbwriter routine")
 	flag_dbretry := flag.Bool("dbretry", false, "Tells the service to run the dbretry routine")
-	flag_dbcachedir := flag.String("dbcachedir", ".kb-dbcache", "Path of the directory used for caching database points")
 	flag_help := flag.Bool("help", false, "Prints the help info and exits")
 	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
 	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
@@ -94,7 +93,7 @@ func main() {
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
 	}
-	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, *flag_api_port, portFactory, *flag_cachedir, *flag_api_sessiondir)
+	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, *flag_api_port, portFactory, *flag_cache_dir, *flag_api_sessiondir)
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
