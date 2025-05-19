@@ -98,7 +98,7 @@ func TestRunGoroutines(t *testing.T) {
 
 	// Initialize with a mock serial port
 	var mts meshtastic.MTSerial
-	mts.Init("/dev/mockTTYUSB0", 115200, 10, "8000", portFactory)
+	mts.Init("/dev/mockTTYUSB0", 115200, 10, "8000", portFactory, "internal/cached")
 
 	// Create a context with cancel
 	ctx, cancel := context.WithCancel(context.Background())

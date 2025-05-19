@@ -18,8 +18,6 @@ import (
 	"kiezbox/internal/marshal"
 )
 
-const CacheDir = "kiezbox/internal/cached"
-
 // WritePointToDatabase writes an InfluxDB point to the InfluxDB bucket
 func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	// Set a timeout
@@ -86,7 +84,8 @@ func (db *InfluxDB) RetryCachedPoints(dir string) {
 	// Read the directory
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		log.Fatalf("Failed to read directory %s: %v", dir, err)
+		log.Printf("Failed to read caching directory %s: %v", dir, err)
+		return
 	}
 
 	// Iterate over the files and read the points

@@ -70,6 +70,7 @@ func main() {
 	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
 	flag_timeout := flag.Int("timeout", 1, "Database timeout in seconds")
 	flag_api_port := flag.String("api_port", "8080", "API port")
+	flag_cache_dir := flag.String("cache_dir", "internal/cached", "Directory for caching points")
 	flag.Parse()
 	// Print help and exit
 	if *flag_help {
@@ -88,7 +89,7 @@ func main() {
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
 	}
-	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, *flag_api_port, portFactory)
+	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, *flag_api_port, portFactory, *flag_cache_dir)
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
