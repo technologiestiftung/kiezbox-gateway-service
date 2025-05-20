@@ -7,12 +7,22 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+func uci_get(key string) (string, error) {
+	output, err := exec.Command("uci", "get", key).Output()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
 
 type SipUser struct {
 	username string
@@ -30,7 +40,12 @@ func idToCid(id int64) string {
 	// but the asterisk curl backend despite documentation suggesting it does not parse this encoding correctly
 	// https://docs.asterisk.org/Configuration/Interfaces/Back-end-Database-and-Realtime-Connectivity/cURL/
 	// at least '+' chars as spaces are not decoded correctly and everything before the last '<' char is used as first part of the called id
-	return fmt.Sprintf("Emergency_%s%04d<2%d>", defaultUserPrefix, id, id)
+	basenr, err := uci_get("kb.main.trunk_base")
+	if err != nil {
+		return fmt.Sprintf("2%d<2%d>", id, id)
+	} else {
+		return fmt.Sprintf("00%s2%d<00%s>", basenr, id, basenr)
+	}
 }
 
 func getSession(extension string) (*sipSession, error) {
