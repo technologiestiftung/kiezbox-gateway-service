@@ -449,7 +449,7 @@ func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Configure the HTTP server
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%s", mts.apiPort),
+		Addr:    fmt.Sprintf("localhost:%s", mts.apiPort),
 		Handler: r,
 	}
 
