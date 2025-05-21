@@ -427,57 +427,60 @@ func (mts *MTSerial) DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_c
 	}
 }
 
-// GetConfig sends a request to the meshtastic device to get the current configuration
-func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup) {
+// GetConfig sends a periodic request to the meshtastic device to get the current configuration
+func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration) {
 	mts.WaitInfo.Wait()
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
 
-	// Create the Admin message
-	adminMessage := &generated.AdminMessage{
-		PayloadVariant: &generated.AdminMessage_GetModuleConfigRequest{
-			GetModuleConfigRequest: generated.AdminMessage_KIEZBOXCONTROL_CONFIG,
-		},
-	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
-	// Marshal the Admin message
-	adminData, err := proto.Marshal(adminMessage)
-	if err != nil {
-		fmt.Printf("Failed to marshal AdminMessage: %v", err)
-	}
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("GetConfig stopped")
+			return
+		case <-ticker.C:
+			// Create the Admin message
+			adminMessage := &generated.AdminMessage{
+				PayloadVariant: &generated.AdminMessage_GetModuleConfigRequest{
+					GetModuleConfigRequest: generated.AdminMessage_KIEZBOXCONTROL_CONFIG,
+				},
+			}
 
-	// Create the Data message
-	dataMessage := &generated.Data{
-		Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
-		Payload: adminData,
-	}
+			// Marshal the Admin message
+			adminData, err := proto.Marshal(adminMessage)
+			if err != nil {
+				fmt.Printf("Failed to marshal AdminMessage: %v", err)
+			}
 
-	// Create the MeshPacket
-	meshPacket := &generated.MeshPacket{
-		From:    0, //TODO: what should be sender id ?
-		To:      mts.MyInfo.MyNodeNum,
-		Channel: 2, //TODO: get Channel dynamically
-		PayloadVariant: &generated.MeshPacket_Decoded{
-			Decoded: dataMessage,
-		},
-	}
-	// Create the ToRadio message
-	toRadio := &generated.ToRadio{
-		PayloadVariant: &generated.ToRadio_Packet{
-			Packet: meshPacket,
-		},
-	}
+			// Create the Data message
+			dataMessage := &generated.Data{
+				Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
+				Payload: adminData,
+			}
 
-	fmt.Printf("Sending config request")
+			// Create the MeshPacket
+			meshPacket := &generated.MeshPacket{
+				From:    0, //TODO: what should be sender id ?
+				To:      mts.MyInfo.MyNodeNum,
+				Channel: 2, //TODO: get Channel dynamically
+				PayloadVariant: &generated.MeshPacket_Decoded{
+					Decoded: dataMessage,
+				},
+			}
+			// Create the ToRadio message
+			toRadio := &generated.ToRadio{
+				PayloadVariant: &generated.ToRadio_Packet{
+					Packet: meshPacket,
+				},
+			}
 
-	// Check if the context has been canceled before attempting to write
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		// Send the message
-		mts.Write(toRadio)
+			// Send the message
+			mts.Write(toRadio)
+
+			fmt.Printf("Sending config request")
+		}
 	}
-
-	return
 }

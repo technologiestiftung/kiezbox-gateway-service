@@ -24,6 +24,7 @@ type MeshtasticDevice interface {
 	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	DBWriterRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
+	GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
 }
 
 // RunGoroutines orchestrates the goroutines that run the service.
@@ -37,6 +38,9 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	go device.Reader(ctx, wg)
 	wg.Add(1)
 	go device.MessageHandler(ctx, wg)
+	wg.Add(1)
+	go device.GetConfig(ctx, wg, 30*time.Second)
+
 	if setTime {
 		// We wait for the not info to set the time
 		wg.Add(1)

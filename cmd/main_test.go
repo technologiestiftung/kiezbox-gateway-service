@@ -68,6 +68,11 @@ func (m *MockMTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int
 	wg.Done()
 }
 
+func (m *MockMTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, duration time.Duration) {
+	m.Called(ctx, wg, duration)
+	wg.Done()
+}
+
 func TestRunGoroutines(t *testing.T) {
 	// Setup
 	mockMTSerial := &MockMTSerial{}
@@ -81,6 +86,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.On("DBWriter", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("DBWriterRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("Settime", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second)).Return(nil)
 
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return mockMTSerial, nil
@@ -115,6 +121,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "DBWriter", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBWriterRetry", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "Settime", mock.Anything, mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second))
 
 	// Wait for all goroutines to finish
 	wg.Wait()
