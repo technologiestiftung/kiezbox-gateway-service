@@ -484,3 +484,33 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 		}
 	}
 }
+
+// ConfigWriter saves the current configuration of the meshtastic device
+func (mts *MTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// Exit gracefully when the context is canceled
+			fmt.Println("ConfigWriter context canceled, shutting down.")
+			return
+		case message := <-mts.ConfigChan:
+			if message == nil {
+				continue
+			}
+			config := message.GetGetModuleConfigResponse()
+			if config != nil {
+				kiezboxControl := config.GetKiezboxControl()
+				if kiezboxControl != nil {
+					mode := kiezboxControl.GetMode()
+					// TODO: Get rid of print statements and save value so it can be retrieved by the API
+					fmt.Printf("Current mode: %d\n", mode)
+				} else {
+					fmt.Println("Mode is nil")
+				}
+			}
+		}
+	}
+}
