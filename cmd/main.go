@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/meshtastic"
 	"os"
 	"sync"
@@ -23,7 +24,7 @@ type MeshtasticDevice interface {
 	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
 	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
-	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
+	SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control)
 	GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
 	ConfigWriter(ctx context.Context, wg *sync.WaitGroup)
 	APIHandler(ctx context.Context, wg *sync.WaitGroup)
@@ -48,7 +49,9 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	if setTime {
 		// We wait for the not info to set the time
 		wg.Add(1)
-		go device.Settime(ctx, wg, time.Now().Unix())
+		now := time.Now().Unix()
+		control := meshtastic.BuildKiezboxControl(&now, nil) // Set time, mode is nil
+		go device.SetKiezboxValues(ctx, wg, control)
 	}
 
 	// Process incoming KiexBox messages in its own goroutine
