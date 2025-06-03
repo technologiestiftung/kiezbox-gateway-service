@@ -47,6 +47,7 @@ type MTSerial struct {
 	ToChan        chan *generated.ToRadio
 	FromChan      chan *generated.FromRadio
 	KBChan        chan *generated.KiezboxMessage
+	ConfigChan    chan *generated.AdminMessage
 	MyInfo        *generated.MyNodeInfo
 	WaitInfo      sync.WaitGroup
 	portFactory   portFactory
@@ -67,6 +68,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
+	mts.ConfigChan = make(chan *generated.AdminMessage, 10)
 	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
@@ -431,6 +433,94 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 
 			} else {
 				log.Println("No database connection. Skipping retry.", err)
+			}
+		}
+	}
+}
+
+// GetConfig sends a periodic request to the meshtastic device to get the current configuration
+func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration) {
+	mts.WaitInfo.Wait()
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("GetConfig stopped")
+			return
+		case <-ticker.C:
+			// Create the Admin message
+			adminMessage := &generated.AdminMessage{
+				PayloadVariant: &generated.AdminMessage_GetModuleConfigRequest{
+					GetModuleConfigRequest: generated.AdminMessage_KIEZBOXCONTROL_CONFIG,
+				},
+			}
+
+			// Marshal the Admin message
+			adminData, err := proto.Marshal(adminMessage)
+			if err != nil {
+				fmt.Printf("Failed to marshal AdminMessage: %v", err)
+			}
+
+			// Create the Data message
+			dataMessage := &generated.Data{
+				Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
+				Payload: adminData,
+			}
+
+			// Create the MeshPacket
+			meshPacket := &generated.MeshPacket{
+				From:    0, //TODO: what should be sender id ?
+				To:      mts.MyInfo.MyNodeNum,
+				Channel: 2, //TODO: get Channel dynamically
+				PayloadVariant: &generated.MeshPacket_Decoded{
+					Decoded: dataMessage,
+				},
+			}
+			// Create the ToRadio message
+			toRadio := &generated.ToRadio{
+				PayloadVariant: &generated.ToRadio_Packet{
+					Packet: meshPacket,
+				},
+			}
+
+			// Send the message
+			mts.Write(toRadio)
+
+			fmt.Printf("Sending config request")
+		}
+	}
+}
+
+// ConfigWriter saves the current configuration of the meshtastic device
+func (mts *MTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
+	// Decrement WaitGroup when function exits
+	defer wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// Exit gracefully when the context is canceled
+			fmt.Println("ConfigWriter context canceled, shutting down.")
+			return
+		case message := <-mts.ConfigChan:
+			if message == nil {
+				continue
+			}
+			config := message.GetGetModuleConfigResponse()
+			if config != nil {
+				kiezboxControl := config.GetKiezboxControl()
+				if kiezboxControl != nil {
+					mode := kiezboxControl.GetMode()
+					// TODO: Get rid of print statements and save value so it can be retrieved by the API
+					fmt.Printf("Current mode: %d\n", mode)
+				} else {
+					fmt.Println("Mode is nil")
+				}
 			}
 		}
 	}
