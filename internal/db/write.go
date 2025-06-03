@@ -140,7 +140,7 @@ func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.P
 			if intVal, ok := v.Interface().(int32); ok {
 				fields[string(fd.Name())] = float64(intVal) / 1000.0
 			} else {
-				fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+				log.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
 			}
 			return true // Continue iteration
 		})
@@ -151,7 +151,7 @@ func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.P
 			if intVal, ok := v.Interface().(int32); ok {
 				fields[string(fd.Name())] = float64(intVal) / 1000.0
 			} else {
-				fmt.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+				log.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
 			}
 			return true // Continue iteration
 		})

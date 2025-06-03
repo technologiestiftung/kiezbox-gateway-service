@@ -18,7 +18,7 @@ import (
 func uci_get(key string) (string, error) {
 	output, err := exec.Command("uci", "get", key).Output()
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.Println("Error:", err)
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
@@ -64,7 +64,7 @@ func getSession(extension string) (*sipSession, error) {
 			var session sipSession
 			err = json.Unmarshal(session_content, &session)
 			if err != nil {
-				log.Fatal("Error unmarshaling JSON:", err)
+				log.Println("Error unmarshaling JSON:", err)
 				continue
 			}
 			if idToExt(session.Extension) == extension {
@@ -97,7 +97,7 @@ func getSessions(pattern string) (*[]sipSession, error) {
 				var session sipSession
 				err = json.Unmarshal(session_content, &session)
 				if err != nil {
-					log.Fatal("Error unmarshaling JSON:", err)
+					log.Println("Error unmarshaling JSON:", err)
 					continue
 				}
 				if re.MatchString(fmt.Sprintf("%s%04d", defaultUserPrefix, session.Extension)) {
@@ -144,7 +144,7 @@ func Asterisk(c *gin.Context) {
 		is_single = true
 	}
 	//TODO: unify logging a bit (log vs print)
-	fmt.Printf("Request for %s single?: %t\n", c.Param("pstype"), is_single)
+	log.Printf("Request for %s single?: %t\n", c.Param("pstype"), is_single)
 	var sessions []sipSession
 	if is_single {
 		id, found := c.GetPostForm("id")
@@ -185,12 +185,12 @@ func Asterisk(c *gin.Context) {
 		c.String(http.StatusNotFound, "No ids found for request")
 		return
 	}
-	fmt.Println("Requested sessions: ", sessions)
+	log.Println("Requested sessions: ", sessions)
 	var responseBody strings.Builder
 	for _, s := range sessions {
 		ext := idToExt(s.Extension)
 		cid := idToCid(s.Extension)
-		fmt.Printf("Requested Extension: %s with Callerid: %s\n", ext, cid)
+		log.Printf("Requested Extension: %s with Callerid: %s\n", ext, cid)
 		switch c.Param("pstype") {
 		case "ps_endpoint":
 			endpoint := url.Values{}
@@ -201,7 +201,7 @@ func Asterisk(c *gin.Context) {
 				endpoint.Add(key, value)
 			}
 			endpoint.Add("callerid", cid)
-			fmt.Printf("Edpoint response: %s", endpoint.Encode())
+			log.Printf("Edpoint response: %s", endpoint.Encode())
 			responseBody.WriteString(endpoint.Encode() + "\n")
 		case "ps_auth":
 			endpoint := url.Values{}

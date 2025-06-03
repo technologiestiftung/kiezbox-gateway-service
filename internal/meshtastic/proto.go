@@ -3,8 +3,8 @@ package meshtastic
 
 import (
 	"context"
-	"fmt"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"log"
 	"sync"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -21,12 +21,12 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			// Exit gracefully when the context is canceled
-			fmt.Println("MessageHandler context canceled, shutting down.")
+			log.Println("MessageHandler context canceled, shutting down.")
 			return
 		case fromRadio, ok := <-mts.FromChan:
 			if !ok {
 				// Channel closed, exit the handler
-				fmt.Println("FromChan closed, shutting down MessageHandler.")
+				log.Println("FromChan closed, shutting down MessageHandler.")
 				return
 			}
 			// debugPrintProtobuf(fromRadio)
@@ -41,9 +41,9 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 						var KiezboxMessage generated.KiezboxMessage
 						err := proto.Unmarshal(v.Decoded.Payload, &KiezboxMessage)
 						if err != nil {
-							fmt.Println("Failed to unmarshal KiezboxMessage: %w", err)
+							log.Println("Failed to unmarshal KiezboxMessage: %w", err)
 						} else {
-							fmt.Println("Sucessfully extracted KiezboxMessage:")
+							log.Println("Sucessfully extracted KiezboxMessage:")
 							debugPrintProtobuf(&KiezboxMessage)
 							mts.KBChan <- &KiezboxMessage
 						}
@@ -52,17 +52,17 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 						var AdminMessage generated.AdminMessage
 						err := proto.Unmarshal(v.Decoded.Payload, &AdminMessage)
 						if err != nil {
-							fmt.Println("Failed to unmarshal AdminMessage: %w", err)
+							log.Println("Failed to unmarshal AdminMessage: %w", err)
 						} else {
-							fmt.Println("Sucessfully extracted AdminMessage:")
+							log.Println("Sucessfully extracted AdminMessage:")
 							debugPrintProtobuf(&AdminMessage)
 							mts.ConfigChan <- &AdminMessage
 						}
 					default:
-						fmt.Println("Payload variant not an accepted type of message")
+						log.Println("Payload variant not an accepted type of message")
 					}
 				default:
-					// fmt.Println("Payload variant is encrypted")
+					// log.Println("Payload variant is encrypted")
 				}
 			case *generated.FromRadio_MyInfo:
 				{
@@ -76,7 +76,7 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 					mts.WantConfig()
 				}
 			default:
-				// fmt.Println("Payload variant is not 'packet'")
+				// log.Println("Payload variant is not 'packet'")
 			}
 		}
 	}
@@ -90,11 +90,11 @@ func debugPrintProtobuf(message proto.Message) {
 	}.Marshal(message)
 
 	if err != nil {
-		fmt.Printf("Failed to marshal Protobuf message to text: %v", err)
+		log.Printf("Failed to marshal Protobuf message to text: %v", err)
 		return
 	}
 
 	// Print the formatted Protobuf message
-	fmt.Println("Protobuf message content (Text):")
-	fmt.Println(string(textData))
+	log.Println("Protobuf message content (Text):")
+	log.Println(string(textData))
 }

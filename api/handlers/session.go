@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"log"
@@ -94,34 +93,38 @@ func generatePassword() (string, error) {
 //   - For `GET`, it returns the session data as JSON.
 //   - For `HEAD`, it returns only the status code (can be used to validate if a session is still valid)
 //   - Returns a 401 Unauthorized if no session token is provided or a 404 Not Found if the session cannot be found.
+//
 // - `DELETE`:
 //   - Deletes the session file associated with the provided cookie/token.
 //   - Returns a 200 OK if the session is successfully deleted or a 500 Internal Server Error if the deletion fails.
+//
 // - `POST`:
 //   - Creates a new session, generates a unique session token, and stores it
 //   - This method will clean up the old session if a valid session cookie is provided with the request
 //   - Ensures that extensions used in the session are unique, cleaning up expired sessions and checking for conflicts.
 //   - Returns a 200 OK with the new session information if successful or a 503 Service Unavailable if no free sessions are available.
+//
 // - Other HTTP methods:
 //   - Returns a 405 Method Not Allowed if the method is not supported.
+//
 // TODO: Adapt this to be 'real' openAPI doc?
 func Session(c *gin.Context) {
 	cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
 	files, err := os.ReadDir(defaultSessionPath)
 	if err != nil {
-		log.Fatalf("Failed to read from session directory %s: %v", defaultSessionPath, err)
+		log.Printf("Failed to read from session directory %s: %v", defaultSessionPath, err)
 		c.String(http.StatusInternalServerError, "Failed to read from session directory %s: %v", defaultSessionPath, err)
 		return
 	}
 	method := c.Request.Method
 	log.Printf("Handling %s request", method)
-	if ! ( method == "GET" || method == "HEAD" || method == "DELETE" || method == "POST" ) {
+	if !(method == "GET" || method == "HEAD" || method == "DELETE" || method == "POST") {
 		c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
 		return
 	}
 	sessionToken, _ := c.Cookie(cookieName)
 	if sessionToken != "" {
-		filePath := filepath.Join(defaultSessionPath, filepath.Clean(sessionToken) + ".json")
+		filePath := filepath.Join(defaultSessionPath, filepath.Clean(sessionToken)+".json")
 		// Delete (old) session on DELETE or when the user is requesting a new one via POST
 		if method == "DELETE" || method == "POST" {
 			log.Printf("Removing %s because of %s\n", filePath, method)
@@ -182,7 +185,7 @@ func Session(c *gin.Context) {
 				var session sipSession
 				err = json.Unmarshal(session_content, &session)
 				if err != nil {
-					log.Fatal("Error unmarshaling JSON:", err)
+					log.Println("Error unmarshaling JSON:", err)
 					continue
 				}
 				// removing timed out sessions while we are at it
@@ -222,7 +225,7 @@ func Session(c *gin.Context) {
 			newSessionToken := uuid.New().String()
 			password, err := generatePassword()
 			if err != nil {
-				fmt.Println("Failed to generate secure password:", err)
+				log.Println("Failed to generate secure password:", err)
 				c.String(http.StatusInternalServerError, "Failed to generate sercure Password:", err)
 				return
 
@@ -232,7 +235,7 @@ func Session(c *gin.Context) {
 				filePath := filepath.Join(defaultSessionPath, newSessionToken+".json")
 				file, err := os.Create(filePath)
 				if err != nil {
-					fmt.Println("Error creating file:", err)
+					log.Println("Error creating file:", err)
 					c.String(http.StatusInternalServerError, "Error creating file:", err)
 					return
 				}
@@ -241,7 +244,7 @@ func Session(c *gin.Context) {
 				encoder := json.NewEncoder(file)
 				err = encoder.Encode(new_session)
 				if err != nil {
-					fmt.Println("Error encoding JSON:", err)
+					log.Println("Error encoding JSON:", err)
 					return
 				}
 				c.SetCookie(
@@ -262,7 +265,7 @@ func Session(c *gin.Context) {
 	}
 }
 
-//TODO: move environment variables to some global state
+// TODO: move environment variables to some global state
 // and maybe have them retrieved from some central system/uci config
 func SIPConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

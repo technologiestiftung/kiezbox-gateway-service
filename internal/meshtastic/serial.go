@@ -82,7 +82,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 	mts.apiSessionDir = api_sessiondir
 	var err = mts.Open()
 	if err != nil {
-		fmt.Println("Serial port not available yet. Reader will retry opening it. ")
+		log.Println("Serial port not available yet. Reader will retry opening it. ")
 	}
 }
 
@@ -91,7 +91,7 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 func (mts *MTSerial) Open() (err error) {
 	mts.port, err = mts.portFactory(mts.conf)
 	if err != nil {
-		fmt.Printf("Failed to open serial port: %v\n", err)
+		log.Printf("Failed to open serial port: %v\n", err)
 		return err
 	}
 	mts.WantConfig()
@@ -99,13 +99,13 @@ func (mts *MTSerial) Open() (err error) {
 }
 
 func (mts *MTSerial) WantConfig() {
-	fmt.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
+	log.Println("Serial port opened successfully with baud rate:", mts.conf.Baud)
 	radioConfig := &generated.ToRadio{
 		PayloadVariant: &generated.ToRadio_WantConfigId{
 			WantConfigId: mts.config_id,
 		},
 	}
-	fmt.Printf("Sending ToRadio message: %+v\n", radioConfig)
+	log.Printf("Sending ToRadio message: %+v\n", radioConfig)
 	mts.Write(radioConfig)
 }
 
@@ -115,7 +115,7 @@ func (mts *MTSerial) Close() {
 	var err error
 	err = mts.port.Close()
 	if err != nil {
-		fmt.Printf("Failed to close serial port: %v", err)
+		log.Printf("Failed to close serial port: %v", err)
 	}
 }
 
@@ -130,13 +130,13 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Heartbeat stopped")
+			log.Println("Heartbeat stopped")
 			return
 		case t := <-ticker.C:
 			Heartbeat := &generated.ToRadio{
 				PayloadVariant: &generated.ToRadio_Heartbeat{},
 			}
-			fmt.Printf("Sending Heartbeat at %s\n", t)
+			log.Printf("Sending Heartbeat at %s\n", t)
 			mts.Write(Heartbeat)
 		}
 	}
@@ -161,7 +161,7 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 	// Marshal the Kiezbox message
 	kiezboxData, err := proto.Marshal(kiezboxMessage)
 	if err != nil {
-		fmt.Printf("Failed to marshal KiezboxMessage: %v", err)
+		log.Printf("Failed to marshal KiezboxMessage: %v", err)
 	}
 
 	// Create the Data message
@@ -187,7 +187,7 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 		},
 	}
 
-	fmt.Printf("Setting time to unix time %d\n", time)
+	log.Printf("Setting time to unix time %d\n", time)
 
 	// Check if the context has been canceled before attempting to write
 	select {
@@ -216,21 +216,21 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			// Context has been cancelled, exit the loop
-			fmt.Println("Writer stopped")
+			log.Println("Writer stopped")
 			return
 		case ToRadio, ok := <-mts.ToChan:
 			if !ok {
 				// Channel has been closed, exit the loop
-				fmt.Println("ToChan closed")
+				log.Println("ToChan closed")
 				return
 			}
-			fmt.Printf("Sending Protobuf to device: %+v\n", ToRadio)
+			log.Printf("Sending Protobuf to device: %+v\n", ToRadio)
 			pb_marshalled, err := proto.Marshal(ToRadio)
 			if err != nil {
-				fmt.Println("failed to marshal ToRadio: %w", err)
+				log.Println("failed to marshal ToRadio: %w", err)
 			}
 			hex := fmt.Sprintf("%x", pb_marshalled)
-			fmt.Printf("ToRadio Marshalled: 0x%s\n", hex)
+			log.Printf("ToRadio Marshalled: 0x%s\n", hex)
 			configLen := len(pb_marshalled)
 			configHeader := []byte{
 				start1,
@@ -240,15 +240,15 @@ func (mts *MTSerial) Writer(ctx context.Context, wg *sync.WaitGroup) {
 			}
 			packet := append(configHeader, pb_marshalled...)
 			// Debug output
-			fmt.Printf("Sending packet (Hex): %x\n", packet)
+			log.Printf("Sending packet (Hex): %x\n", packet)
 			// Write the packet to the serial port
 			if !interfaceIsNil(mts.port) {
 				_, err = mts.port.Write(packet)
 				if err != nil {
-					fmt.Println("failed to write to serial port: %w", err)
+					log.Println("failed to write to serial port: %w", err)
 				}
 			} else {
-				fmt.Println("failed to write data to serial, as port is not available")
+				log.Println("failed to write data to serial, as port is not available")
 			}
 		}
 	}
@@ -267,26 +267,26 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Reader stopped")
+			log.Println("Reader stopped")
 			return
 		default:
 			// Read one byte at a time from the serial port.
 			byteBuf := make([]byte, 1)
 			var portbroken bool = false
 			if interfaceIsNil(mts.port) {
-				fmt.Println("Serial port is not initialized:", mts.port)
+				log.Println("Serial port is not initialized:", mts.port)
 				portbroken = true
 			} else {
 				_, err := mts.port.Read(byteBuf)
 				if err != nil {
-					fmt.Printf("Error reading from serial port: %v\n", err)
+					log.Printf("Error reading from serial port: %v\n", err)
 					portbroken = true
 					mts.Close()
 				}
 			}
 			if portbroken {
 				for {
-					fmt.Println("Waiting for device to reconnect...")
+					log.Println("Waiting for device to reconnect...")
 					var err = mts.Open()
 					if err == nil {
 						break
@@ -305,8 +305,8 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 					// Print debug output when a newline is detected.
 					// ascii := debugBuffer.String()
 					// hex := fmt.Sprintf("%x", debugBuffer.Bytes())
-					// fmt.Printf("DEBUG (ASCII): %s\n", ascii)
-					// fmt.Printf("Debug output (Hex): %s\n", hex)
+					// log.Printf("DEBUG (ASCII): %s\n", ascii)
+					// log.Printf("Debug output (Hex): %s\n", hex)
 					debugBuffer.Reset()
 				} else {
 					debugBuffer.WriteByte(b)
@@ -330,7 +330,7 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 				protoLen := binary.BigEndian.Uint16(header[2:4])
 
 				if protoLen > maxProtoSize {
-					fmt.Println("Invalid packet: length exceeds 512 bytes. Ignoring...")
+					log.Println("Invalid packet: length exceeds 512 bytes. Ignoring...")
 					buffer.Reset() // Reset and continue looking for START1.
 					continue
 				}
@@ -340,12 +340,12 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 					protobufMsg := buffer.Bytes()[4 : 4+protoLen]
 
 					// Log Protobuf frame details for debugging.
-					fmt.Printf("Protobuf frame detected! Length: %d bytes\n", protoLen)
-					fmt.Printf("Protobuf frame (Hex): %x\n", protobufMsg)
+					log.Printf("Protobuf frame detected! Length: %d bytes\n", protoLen)
+					log.Printf("Protobuf frame (Hex): %x\n", protobufMsg)
 					var fromRadio generated.FromRadio
 					err := proto.Unmarshal(protobufMsg, &fromRadio)
 					if err != nil {
-						fmt.Println("failed to unmarshal fromRadio: %w", err)
+						log.Println("failed to unmarshal fromRadio: %w", err)
 					} else {
 						mts.FromChan <- &fromRadio
 					}
@@ -366,7 +366,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 		select {
 		case <-ctx.Done():
 			// Exit gracefully when the context is canceled
-			fmt.Println("DBWriter context canceled, shutting down.")
+			log.Println("DBWriter context canceled, shutting down.")
 			return
 		case message := <-mts.KBChan:
 			if message == nil {
@@ -380,15 +380,15 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			databaseConnected, err := db_client.Client.Ping(ctx)
 			if !databaseConnected {
 				// Cache the message if database is not connected
-				fmt.Println("No database connection. Caching point.", err)
+				log.Println("No database connection. Caching point.", err)
 				db.WritePointToFile(message, mts.cacheDir)
 				continue
 			}
 
-			fmt.Println("Handling Protobuf message")
+			log.Println("Handling Protobuf message")
 			// Convert the Protobuf message to an InfluxDB point
 			point, err := db.KiezboxMessageToPoint(message)
-			fmt.Printf("Adding point: %+v\n", point)
+			log.Printf("Adding point: %+v\n", point)
 
 			// Write the point to InfluxDB
 			err = db_client.WritePointToDatabase(point)
@@ -403,7 +403,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 					log.Println("Unexpected error:", err)
 				}
 			} else {
-				fmt.Println("Data written to InfluxDB successfully")
+				log.Println("Data written to InfluxDB successfully")
 			}
 		}
 	}
@@ -421,18 +421,18 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Retry goroutine shutting down.")
+			log.Println("Retry goroutine shutting down.")
 			return
 		case <-ticker.C:
 			// Check if the database is connected before retrying
 			databaseConnected, err := db_client.Client.Ping(ctx)
 
 			if databaseConnected {
-				fmt.Println("Database connected, retrying cached points.")
+				log.Println("Database connected, retrying cached points.")
 				db_client.RetryCachedPoints(mts.cacheDir)
 
 			} else {
-				fmt.Println("No database connection. Skipping retry.", err)
+				log.Println("No database connection. Skipping retry.", err)
 			}
 		}
 	}
@@ -545,12 +545,12 @@ func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Start the HTTP server
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Failed to start API server: %v", err)
+		log.Printf("Failed to start API server: %v", err)
 	}
 
 	// Handle context cancellation and server shutdown
 	<-ctx.Done()
-	fmt.Println("Shutting down API server...")
+	log.Println("Shutting down API server...")
 	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("API server forced to shut down: %v", err)
 	}
