@@ -594,7 +594,7 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 
 			// Create the Data message
 			dataMessage := &generated.Data{
-				Portnum: generated.PortNum_KIEZBOX_CONTROL_APP, // Replace with the appropriate port number
+				Portnum: generated.PortNum_ADMIN_APP, // Replace with the appropriate port number
 				Payload: adminData,
 			}
 
@@ -602,7 +602,7 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 			meshPacket := &generated.MeshPacket{
 				From:    0, //TODO: what should be sender id ?
 				To:      mts.MyInfo.MyNodeNum,
-				Channel: 2, //TODO: get Channel dynamically
+				Channel: 1, //TODO: get Channel dynamically
 				PayloadVariant: &generated.MeshPacket_Decoded{
 					Decoded: dataMessage,
 				},
@@ -617,7 +617,7 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 			// Send the message
 			mts.Write(toRadio)
 
-			fmt.Printf("Sending config request")
+			fmt.Println("Sending config request")
 		}
 	}
 }
