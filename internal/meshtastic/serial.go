@@ -61,6 +61,24 @@ func interfaceIsNil(i interface{}) bool {
 	return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
 }
 
+// BuildKiezboxControl creates a KiezboxMessage_Control struct with the provided values.
+// Pass unixTime as a pointer (or nil) and mode as a pointer (or nil) to set one or both fields.
+func BuildKiezboxControl(unixTime *int64, mode *int32) *generated.KiezboxMessage_Control {
+	control := &generated.KiezboxMessage_Control{}
+
+	if unixTime != nil {
+		control.Set = &generated.KiezboxMessage_Control_UnixTime{
+			UnixTime: *unixTime,
+		}
+	}
+	if mode != nil {
+		control.Set = &generated.KiezboxMessage_Control_Mode{
+			Mode: generated.KiezboxMessage_Mode(*mode),
+		}
+	}
+	return control
+}
+
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
@@ -139,6 +157,57 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 			log.Printf("Sending Heartbeat at %s\n", t)
 			mts.Write(Heartbeat)
 		}
+	}
+}
+
+// SetKiezboxValues sends a Kiezbox control message to the meshtastic device to set values such as time and mode.
+// Pass a pointer to generated.KiezboxMessage_Control with the desired fields set.
+func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
+	mts.WaitInfo.Wait()
+	defer wg.Done()
+
+	// Create the Kiezbox message with the provided control fields
+	kiezboxMessage := &generated.KiezboxMessage{
+		Control: control,
+	}
+
+	// Marshal the Kiezbox message
+	kiezboxData, err := proto.Marshal(kiezboxMessage)
+	if err != nil {
+		log.Printf("Failed to marshal KiezboxMessage: %v", err)
+	}
+
+	// Create the Data message
+	dataMessage := &generated.Data{
+		Portnum: generated.PortNum_KIEZBOX_CONTROL_APP,
+		Payload: kiezboxData,
+	}
+
+	// Create the MeshPacket
+	meshPacket := &generated.MeshPacket{
+		From:    0, // TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
+		Channel: 2, // TODO: get Channel dynamically
+		PayloadVariant: &generated.MeshPacket_Decoded{
+			Decoded: dataMessage,
+		},
+	}
+
+	// Create the ToRadio message
+	toRadio := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_Packet{
+			Packet: meshPacket,
+		},
+	}
+
+	log.Printf("Setting Kiezbox values: %+v\n", control)
+
+	// Check if the context has been canceled before attempting to write
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		mts.Write(toRadio)
 	}
 }
 
