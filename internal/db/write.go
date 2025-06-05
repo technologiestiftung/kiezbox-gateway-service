@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,6 +15,7 @@ import (
 
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/marshal"
+	"log/slog"
 )
 
 // WritePointToDatabase writes an InfluxDB point to the InfluxDB bucket
@@ -28,10 +28,10 @@ func (db *InfluxDB) WritePointToDatabase(point *influxdb_write.Point) error {
 	err := db.WriteAPI.WritePoint(ctx, point)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			log.Println("Database connection timed out")
+			slog.Error("Database connection timed out")
 			return fmt.Errorf("database connection timed out: %w", ctx.Err())
 		} else {
-			log.Println("Data error: %w", err)
+			slog.Error("Data error", "err", err)
 		}
 	}
 	return nil
@@ -84,7 +84,7 @@ func (db *InfluxDB) RetryCachedPoints(dir string) {
 	// Read the directory
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("Failed to read caching directory %s: %v", dir, err)
+		slog.Error("Failed to read caching directory", "dir", dir, "err", err)
 		return
 	}
 
@@ -93,14 +93,14 @@ func (db *InfluxDB) RetryCachedPoints(dir string) {
 		filePath := filepath.Join(dir, file.Name())
 		message, err := ReadPointFromFile(filePath) // Read and unmarshal Protobuf message
 		if err != nil {
-			log.Printf("Failed to read file %s: %v", filePath, err)
+			slog.Error("Failed to read file", "file", filePath, "err", err)
 			continue
 		}
 
 		// Convert the Protobuf message to an InfluxDB point
 		point, err := KiezboxMessageToPoint(message)
 		if err != nil {
-			log.Printf("Failed to convert message to point: %v", err)
+			slog.Error("Failed to convert message to point", "err", err)
 			continue // Skip this file and move to the next
 		}
 
@@ -111,9 +111,9 @@ func (db *InfluxDB) RetryCachedPoints(dir string) {
 		if err == nil || !errors.Is(err, context.DeadlineExceeded) {
 			// Delete the file
 			if err := os.Remove(filePath); err != nil {
-				log.Printf("Failed to delete cached point %s: %v", filePath, err)
+				slog.Error("Failed to delete cached point", "file", filePath, "err", err)
 			} else {
-				log.Printf("Successfully deleted cached point %s", filePath)
+				slog.Info("Successfully deleted cached point", "file", filePath)
 			}
 		}
 	}
@@ -140,7 +140,7 @@ func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.P
 			if intVal, ok := v.Interface().(int32); ok {
 				fields[string(fd.Name())] = float64(intVal) / 1000.0
 			} else {
-				log.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+				slog.Error("Unexpected type for field", "field", fd.Name(), "type", fmt.Sprintf("%T", v.Interface()))
 			}
 			return true // Continue iteration
 		})
@@ -151,7 +151,7 @@ func KiezboxMessageToPoint(message *generated.KiezboxMessage) (*influxdb_write.P
 			if intVal, ok := v.Interface().(int32); ok {
 				fields[string(fd.Name())] = float64(intVal) / 1000.0
 			} else {
-				log.Printf("Unexpected type for field %s: %T\n", fd.Name(), v.Interface())
+				slog.Error("Unexpected type for field", "field", fd.Name(), "type", fmt.Sprintf("%T", v.Interface()))
 			}
 			return true // Continue iteration
 		})

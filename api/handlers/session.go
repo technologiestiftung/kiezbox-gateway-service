@@ -4,9 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"log"
+	"log/slog"
 	mathRand "math/rand"
 	"net/http"
 	"os"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // Cookie settings defaults
@@ -112,12 +113,12 @@ func Session(c *gin.Context) {
 	cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
 	files, err := os.ReadDir(defaultSessionPath)
 	if err != nil {
-		log.Printf("Failed to read from session directory %s: %v", defaultSessionPath, err)
+		slog.Error("Failed to read from session directory", "dir", defaultSessionPath, "err", err)
 		c.String(http.StatusInternalServerError, "Failed to read from session directory %s: %v", defaultSessionPath, err)
 		return
 	}
 	method := c.Request.Method
-	log.Printf("Handling %s request", method)
+	slog.Info("Handling request", "method", method)
 	if !(method == "GET" || method == "HEAD" || method == "DELETE" || method == "POST") {
 		c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
 		return
@@ -127,11 +128,11 @@ func Session(c *gin.Context) {
 		filePath := filepath.Join(defaultSessionPath, filepath.Clean(sessionToken)+".json")
 		// Delete (old) session on DELETE or when the user is requesting a new one via POST
 		if method == "DELETE" || method == "POST" {
-			log.Printf("Removing %s because of %s\n", filePath, method)
+			slog.Info("Removing session file", "file", filePath, "reason", method)
 			err = os.Remove(filePath)
 			if method == "DELETE" {
 				if err != nil {
-					log.Printf("Failed to remove session %s: %v", filePath, err)
+					slog.Error("Failed to remove session", "file", filePath, "err", err)
 					//INFO: giving back the session token here (as part of the error message) defeats httponly cookies, keep that in mind
 					c.String(http.StatusInternalServerError, "Failed to remove session:", err)
 				} else {
@@ -179,18 +180,18 @@ func Session(c *gin.Context) {
 			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 				session_content, err := os.ReadFile(filePath)
 				if err != nil {
-					log.Printf("Failed to read file %s: %v", filePath, err)
+					slog.Error("Failed to read file", "file", filePath, "err", err)
 					continue
 				}
 				var session sipSession
 				err = json.Unmarshal(session_content, &session)
 				if err != nil {
-					log.Println("Error unmarshaling JSON:", err)
+					slog.Error("Error unmarshaling JSON", "err", err)
 					continue
 				}
 				// removing timed out sessions while we are at it
 				if time.Now().Unix() > defaultCookieMaxAge+session.Timestamp {
-					log.Printf("Removing %s because of timeout (%d)\n", filePath, session.Timestamp)
+					slog.Info("Removing session file due to timeout", "file", filePath, "timestamp", session.Timestamp)
 					err = os.Remove(filePath)
 					continue
 				}
@@ -198,7 +199,7 @@ func Session(c *gin.Context) {
 				//TODO: this should not happen? but currently is possible with race condition from multiple POSTs?
 				if is_taken, exists := taken[session.Extension]; exists {
 					if is_taken {
-						log.Printf("Removing %s because extension (%d) was already taken\n", filePath, session.Extension)
+						slog.Info("Removing session file due to duplicate extension", "file", filePath, "extension", session.Extension)
 						err = os.Remove(filePath)
 						continue
 					}
@@ -206,7 +207,7 @@ func Session(c *gin.Context) {
 					taken[session.Extension] = true
 				}
 			} else {
-				log.Printf("Ignored file: %s", filePath)
+				slog.Info("Ignored file", "file", filePath)
 			}
 		}
 		var new_session sipSession
@@ -225,7 +226,7 @@ func Session(c *gin.Context) {
 			newSessionToken := uuid.New().String()
 			password, err := generatePassword()
 			if err != nil {
-				log.Println("Failed to generate secure password:", err)
+				slog.Error("Failed to generate secure password", "err", err)
 				c.String(http.StatusInternalServerError, "Failed to generate sercure Password:", err)
 				return
 
@@ -235,7 +236,7 @@ func Session(c *gin.Context) {
 				filePath := filepath.Join(defaultSessionPath, newSessionToken+".json")
 				file, err := os.Create(filePath)
 				if err != nil {
-					log.Println("Error creating file:", err)
+					slog.Error("Error creating file", "file", filePath, "err", err)
 					c.String(http.StatusInternalServerError, "Error creating file:", err)
 					return
 				}
@@ -244,7 +245,7 @@ func Session(c *gin.Context) {
 				encoder := json.NewEncoder(file)
 				err = encoder.Encode(new_session)
 				if err != nil {
-					log.Println("Error encoding JSON:", err)
+					slog.Error("Error encoding JSON", "err", err)
 					return
 				}
 				c.SetCookie(

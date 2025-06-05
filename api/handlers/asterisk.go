@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,7 +18,7 @@ import (
 func uci_get(key string) (string, error) {
 	output, err := exec.Command("uci", "get", key).Output()
 	if err != nil {
-		log.Println("Error:", err)
+		slog.Error("uci_get error", "err", err)
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
@@ -58,13 +58,13 @@ func getSession(extension string) (*sipSession, error) {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 			session_content, err := os.ReadFile(filePath)
 			if err != nil {
-				log.Printf("Failed to read file %s: %v", filePath, err)
+				slog.Error("Failed to read file", "file", filePath, "err", err)
 				continue
 			}
 			var session sipSession
 			err = json.Unmarshal(session_content, &session)
 			if err != nil {
-				log.Println("Error unmarshaling JSON:", err)
+				slog.Error("Error unmarshaling JSON", "err", err)
 				continue
 			}
 			if idToExt(session.Extension) == extension {
@@ -91,13 +91,13 @@ func getSessions(pattern string) (*[]sipSession, error) {
 			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 				session_content, err := os.ReadFile(filePath)
 				if err != nil {
-					log.Printf("Failed to read file %s: %v", filePath, err)
+					slog.Error("Failed to read file", "file", filePath, "err", err)
 					continue
 				}
 				var session sipSession
 				err = json.Unmarshal(session_content, &session)
 				if err != nil {
-					log.Println("Error unmarshaling JSON:", err)
+					slog.Error("Error unmarshaling JSON", "err", err)
 					continue
 				}
 				if re.MatchString(fmt.Sprintf("%s%04d", defaultUserPrefix, session.Extension)) {
@@ -143,8 +143,7 @@ func Asterisk(c *gin.Context) {
 	if c.Param("singlemulti") == "single" {
 		is_single = true
 	}
-	//TODO: unify logging a bit (log vs print)
-	log.Printf("Request for %s single?: %t\n", c.Param("pstype"), is_single)
+	slog.Info("Request received", "pstype", c.Param("pstype"), "single", is_single)
 	var sessions []sipSession
 	if is_single {
 		id, found := c.GetPostForm("id")
@@ -153,12 +152,12 @@ func Asterisk(c *gin.Context) {
 			if err == nil {
 				sessions = append(sessions, *session)
 			} else {
-				log.Printf("ID %s not found", id)
+				slog.Warn("ID not found", "id", id)
 				c.String(http.StatusNotFound, "ID %s not found", id)
 				return
 			}
 		} else {
-			log.Printf("Parameter `id` not set")
+			slog.Warn("Parameter `id` not set")
 			c.String(http.StatusBadRequest, "Parameter `id` not set")
 			return
 		}
@@ -171,12 +170,12 @@ func Asterisk(c *gin.Context) {
 			if err == nil {
 				sessions = append(sessions, *matched_sessions...)
 			} else {
-				log.Printf("ID LIKE %s converted to %s but not found", idLike, idLikeRegex)
+				slog.Warn("ID LIKE not found", "idLike", idLike, "regex", idLikeRegex)
 				c.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
 				return
 			}
 		} else {
-			log.Printf("Parameter `id LIKE` not set")
+			slog.Warn("Parameter `id LIKE` not set")
 			c.String(http.StatusBadRequest, "Parameter `id LIKE` not set")
 			return
 		}
@@ -185,12 +184,12 @@ func Asterisk(c *gin.Context) {
 		c.String(http.StatusNotFound, "No ids found for request")
 		return
 	}
-	log.Println("Requested sessions: ", sessions)
+	slog.Info("Requested sessions", "sessions", sessions)
 	var responseBody strings.Builder
 	for _, s := range sessions {
 		ext := idToExt(s.Extension)
 		cid := idToCid(s.Extension)
-		log.Printf("Requested Extension: %s with Callerid: %s\n", ext, cid)
+		slog.Info("Requested Extension", "extension", ext, "callerid", cid)
 		switch c.Param("pstype") {
 		case "ps_endpoint":
 			endpoint := url.Values{}
@@ -201,7 +200,7 @@ func Asterisk(c *gin.Context) {
 				endpoint.Add(key, value)
 			}
 			endpoint.Add("callerid", cid)
-			log.Printf("Edpoint response: %s", endpoint.Encode())
+			slog.Info("Endpoint response", "response", endpoint.Encode())
 			responseBody.WriteString(endpoint.Encode() + "\n")
 		case "ps_auth":
 			endpoint := url.Values{}
@@ -221,7 +220,6 @@ func Asterisk(c *gin.Context) {
 			endpoint.Add("mailboxes", ext+"@default")
 			responseBody.WriteString(endpoint.Encode() + "\n")
 		default:
-
 			c.String(http.StatusBadRequest, "Request for %s unknown", c.Param("pstype"))
 			return
 		}
