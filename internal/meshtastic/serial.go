@@ -37,7 +37,11 @@ type SerialPort interface {
 	io.ReadWriteCloser
 }
 
-type portFactory func(*serial.Config) (SerialPort, error)
+type PortFactory func(*serial.Config) (SerialPort, error)
+
+func CreateSerialPort(conf *serial.Config) (SerialPort, error) {
+    return serial.OpenPort(conf)
+}
 
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
@@ -50,7 +54,7 @@ type MTSerial struct {
 	ConfigChan    chan *generated.AdminMessage
 	MyInfo        *generated.MyNodeInfo
 	WaitInfo      sync.WaitGroup
-	portFactory   portFactory
+	portFactory   PortFactory
 	retryTime     int
 	apiPort       string
 	cacheDir      string
@@ -64,7 +68,7 @@ func interfaceIsNil(i interface{}) bool {
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory, cacheDir string, api_sessiondir string) {
+func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory PortFactory, cacheDir string, api_sessiondir string) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)

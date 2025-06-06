@@ -14,7 +14,8 @@ var once sync.Once
 type LoggerConfig struct {
 	Level     slog.Leveler
 	Format    string // Should be "text" or "json"
-	Filename  string // Empty for stdout
+	LogFile  string // File to log to if LogToFile is set
+	LogToFile  bool
 	AddSource bool   // Whether to include source info in logs
 	ShortPath bool   // Print only filename is ource info logs
 }
@@ -23,9 +24,9 @@ type LoggerConfig struct {
 func InitLogger(cfg LoggerConfig) {
 	once.Do(func() {
 		var output *os.File
-		if cfg.Filename != "" {
+		if cfg.LogToFile {
 			var err error
-			output, err = os.OpenFile(cfg.Filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			output, err = os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 			if err != nil {
 				output = os.Stdout
 				os.Stderr.WriteString("Failed to open log file, using stdout: " + err.Error() + "\n")

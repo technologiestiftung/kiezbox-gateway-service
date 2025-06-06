@@ -1,6 +1,7 @@
 package db
 
 import (
+	c "kiezbox/internal/config"
 	"context"
 	"log"
 	"time"
@@ -19,9 +20,9 @@ type InfluxDB struct {
 }
 
 // CreateClient initializes the InfluxDB client and APIs
-func CreateClient(url, token, org, bucket string, timeout int) *InfluxDB {
+func CreateClient() *InfluxDB {
 	// Create a new InfluxDB client
-	client := influxdb.NewClient(url, token)
+	client := influxdb.NewClient(c.Cfg.DbUrl, c.Cfg.DbToken)
 
 	// Check if the client is working
 	_, err := client.Health(context.Background())
@@ -30,16 +31,16 @@ func CreateClient(url, token, org, bucket string, timeout int) *InfluxDB {
 	}
 
 	// Initialize WriteAPI and QueryAPI once
-	writeAPI := client.WriteAPIBlocking(org, bucket)
-	queryAPI := client.QueryAPI(org)
+	writeAPI := client.WriteAPIBlocking(c.Cfg.DbOrg, c.Cfg.DbBucket)
+	queryAPI := client.QueryAPI(c.Cfg.DbOrg)
 
 	return &InfluxDB{
 		Client:   client,
 		WriteAPI: writeAPI,
 		QueryAPI: queryAPI,
-		Org:      org,
-		Bucket:   bucket,
-		Timeout:  time.Duration(timeout) * time.Second,
+		Org:      c.Cfg.DbOrg,
+		Bucket:   c.Cfg.DbBucket,
+		Timeout:  c.Cfg.DbTimeout,
 	}
 }
 
