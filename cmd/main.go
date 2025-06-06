@@ -2,19 +2,34 @@ package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
 	"kiezbox/logging"
+	"log"
 	"log/slog"
-	"os"
 	"sync"
 	"time"
 
+	"github.com/BoRuDar/configuration/v4"
 	"github.com/tarm/serial"
 )
+
+type Config struct {
+    SetTime bool `flag:"settime" default:"true"`
+    DbWriter bool `flag:"dbwriter" default:"true"`
+    DbRetry bool `flag:"dbretry" default:"true"`
+    SerialDevice string `flag:"serial_dev" default:"/dev/ttyUSB0"`
+    SerialBaud int `flag:"serial_baud" default:"115200"`
+    RetryInterval int `flag:"retry_interval" default:"60"`
+    CacheDir string `flag:"cache_dir" default:".kb-dbcache"`
+    DbTimeout int `flag:"db_timeout" default:"5"`
+    ApiPort string `flag:"api_port" default:"9080"`
+    SessionDir string `flag:"api_sessiondir" default:".kb-session"`
+}
+
+// Global gateway service config
+var gwConfig Config
 
 // Using an interface as an intermediate layer instead of calling the meshtastic functions directly
 // allows for dependency injection, essential for unittesting.
@@ -73,6 +88,19 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 }
 
 func main() {
+	//Configuration value priority:
+	// 1. cli argurments
+	// 2. environment variables
+	// 3. default values
+	configurator := configuration.New(
+		&gwConfig,
+		configuration.NewFlagProvider(),
+		configuration.NewEnvProvider(),
+		configuration.NewDefaultProvider(),
+	)
+	if err := configurator.InitValues(); err != nil {
+		log.Fatal("Configuration error: ", err)
+	}
 	logging.InitLogger(logging.LoggerConfig{
 		Level:     slog.LevelInfo,
 		Format:    "text",
@@ -81,28 +109,8 @@ func main() {
 	})
 
 	slog.Info("Logger initialized", "app", "kiezbox-gateway-service")
-
-	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
-	flag_dbwriter := flag.Bool("dbwriter", false, "Tells the service to run the dbwriter routine")
-	flag_dbretry := flag.Bool("dbretry", false, "Tells the service to run the dbretry routine")
-	flag_help := flag.Bool("help", false, "Prints the help info and exits")
-	flag_serial_device := flag.String("dev", "/dev/ttyUSB0", "The serial device connecting us to the meshtastic device")
-	flag_serial_baud := flag.Int("baud", 115200, "Baud rate of the serial device")
-	flag_retry_time := flag.Int("retry", 10, "Time in seconds to retry writing to database")
-	flag_cache_dir := flag.String("cache_dir", ".kb-dbcache", "Directory for caching points")
-	flag_timeout := flag.Int("timeout", 3, "Database timeout in seconds")
-	flag_api_port := flag.String("api_port", "9080", "API port")
-	flag_api_sessiondir := flag.String("api_sessiondir", ".kb-session", "Path of the directory used for storing web client sessions")
-	flag.Parse()
-	// Print help and exit
-	if *flag_help {
-		fmt.Println("Kiezbox Gateway Service.")
-		fmt.Println("Usage flags:")
-		flag.VisitAll(func(f *flag.Flag) {
-			fmt.Printf("  -%s: %s (default: %s)\n", f.Name, f.Usage, f.DefValue)
-		})
-		os.Exit(0)
-	}
+	slog.Info("Service configuration", "cfg", gwConfig)
+	slog.Debug("Service configuration", "cfg", gwConfig)
 
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
@@ -111,13 +119,13 @@ func main() {
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return serial.OpenPort(conf)
 	}
-	mts.Init(*flag_serial_device, *flag_serial_baud, *flag_retry_time, *flag_api_port, portFactory, *flag_cache_dir, *flag_api_sessiondir)
+	mts.Init(gwConfig.SerialDevice, gwConfig.SerialBaud, gwConfig.RetryInterval, gwConfig.ApiPort, portFactory, gwConfig.CacheDir, gwConfig.SessionDir)
 
 	// Load InfluxDB configuration
 	url, token, org, bucket := config.LoadConfig()
 
 	// Initialize InfluxDB client
-	db_client := db.CreateClient(url, token, org, bucket, *flag_timeout)
+	db_client := db.CreateClient(url, token, org, bucket, gwConfig.DbTimeout)
 	defer db_client.Close()
 
 	// Create a context with cancel
@@ -128,7 +136,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	// Run the goroutines
-	RunGoroutines(ctx, &wg, &mts, *flag_settime, *flag_dbwriter, *flag_dbretry, db_client)
+	RunGoroutines(ctx, &wg, &mts, gwConfig.SetTime, gwConfig.DbWriter, gwConfig.DbRetry, db_client)
 
 	// Wait for all goroutines to finish
 	wg.Wait()
