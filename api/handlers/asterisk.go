@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	c "kiezbox/internal/config"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -48,13 +49,13 @@ func idToCid(id int64) string {
 	}
 }
 
-func getSession(extension string) (*sipSession, error) {
-	files, err := os.ReadDir(defaultSessionPath)
+func getSession(extension string, sdir string) (*sipSession, error) {
+	files, err := os.ReadDir(sdir)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read from session directory %s: %v", defaultSessionPath, err)
+		return nil, fmt.Errorf("Failed to read from session directory %s: %v", sdir, err)
 	}
 	for _, file := range files {
-		filePath := filepath.Join(defaultSessionPath, file.Name())
+		filePath := filepath.Join(sdir, file.Name())
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 			session_content, err := os.ReadFile(filePath)
 			if err != nil {
@@ -75,8 +76,8 @@ func getSession(extension string) (*sipSession, error) {
 	return nil, fmt.Errorf("extension %s not found", extension)
 }
 
-func getSessions(pattern string) (*[]sipSession, error) {
-	files, err := os.ReadDir(defaultSessionPath)
+func getSessions(pattern string, sdir string) (*[]sipSession, error) {
+	files, err := os.ReadDir(sdir)
 	var sessions []sipSession
 	if err != nil {
 		return nil, err
@@ -87,7 +88,7 @@ func getSessions(pattern string) (*[]sipSession, error) {
 	} else {
 		found := false
 		for _, file := range files {
-			filePath := filepath.Join(defaultSessionPath, file.Name())
+			filePath := filepath.Join(sdir, file.Name())
 			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 				session_content, err := os.ReadFile(filePath)
 				if err != nil {
@@ -114,7 +115,7 @@ func getSessions(pattern string) (*[]sipSession, error) {
 	}
 }
 
-func Asterisk(c *gin.Context) {
+func Asterisk(ctx *gin.Context) {
 	SipEndpoint := map[string]string{
 		"type":                 "endpoint",
 		"moh_suggest":          "default",
@@ -140,48 +141,48 @@ func Asterisk(c *gin.Context) {
 		"remove_existing":   "yes",
 	}
 	is_single := false
-	if c.Param("singlemulti") == "single" {
+	if ctx.Param("singlemulti") == "single" {
 		is_single = true
 	}
-	slog.Info("Request received", "pstype", c.Param("pstype"), "single", is_single)
+	slog.Info("Request received", "pstype", ctx.Param("pstype"), "single", is_single)
 	var sessions []sipSession
 	if is_single {
-		id, found := c.GetPostForm("id")
+		id, found := ctx.GetPostForm("id")
 		if found {
-			session, err := getSession(id)
+			session, err := getSession(id,c.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *session)
 			} else {
 				slog.Warn("ID not found", "id", id)
-				c.String(http.StatusNotFound, "ID %s not found", id)
+				ctx.String(http.StatusNotFound, "ID %s not found", id)
 				return
 			}
 		} else {
 			slog.Warn("Parameter `id` not set")
-			c.String(http.StatusBadRequest, "Parameter `id` not set")
+			ctx.String(http.StatusBadRequest, "Parameter `id` not set")
 			return
 		}
 	} else {
 		//TODO: check if we need to implement any other parameters, I've seen requests to `mailboxes%20!%3D=` in the logs
-		idLike, found := c.GetPostForm("id LIKE")
+		idLike, found := ctx.GetPostForm("id LIKE")
 		if found {
 			idLikeRegex := "^" + strings.ReplaceAll(strings.ReplaceAll(idLike, "%", ".*"), "_", ".") + "$"
-			matched_sessions, err := getSessions(idLikeRegex)
+			matched_sessions, err := getSessions(idLikeRegex,c.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *matched_sessions...)
 			} else {
 				slog.Warn("ID LIKE not found", "idLike", idLike, "regex", idLikeRegex)
-				c.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
+				ctx.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
 				return
 			}
 		} else {
 			slog.Warn("Parameter `id LIKE` not set")
-			c.String(http.StatusBadRequest, "Parameter `id LIKE` not set")
+			ctx.String(http.StatusBadRequest, "Parameter `id LIKE` not set")
 			return
 		}
 	}
 	if len(sessions) <= 0 {
-		c.String(http.StatusNotFound, "No ids found for request")
+		ctx.String(http.StatusNotFound, "No ids found for request")
 		return
 	}
 	slog.Info("Requested sessions", "sessions", sessions)
@@ -190,7 +191,7 @@ func Asterisk(c *gin.Context) {
 		ext := idToExt(s.Extension)
 		cid := idToCid(s.Extension)
 		slog.Info("Requested Extension", "extension", ext, "callerid", cid)
-		switch c.Param("pstype") {
+		switch ctx.Param("pstype") {
 		case "ps_endpoint":
 			endpoint := url.Values{}
 			endpoint.Add("id", ext)
@@ -220,10 +221,10 @@ func Asterisk(c *gin.Context) {
 			endpoint.Add("mailboxes", ext+"@default")
 			responseBody.WriteString(endpoint.Encode() + "\n")
 		default:
-			c.String(http.StatusBadRequest, "Request for %s unknown", c.Param("pstype"))
+			ctx.String(http.StatusBadRequest, "Request for %s unknown", ctx.Param("pstype"))
 			return
 		}
 	}
-	c.Data(http.StatusOK, "application/x-www-form-urlencoded", []byte(responseBody.String()))
+	ctx.Data(http.StatusOK, "application/x-www-form-urlencoded", []byte(responseBody.String()))
 	return
 }

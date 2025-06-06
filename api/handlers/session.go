@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	c "kiezbox/internal/config"
 	"log/slog"
 	mathRand "math/rand"
 	"net/http"
@@ -25,7 +26,6 @@ const (
 	defaultCookieDomain   = ""
 	defaultCookieSecure   = false
 	defaultCookieHttpOnly = true
-	defaultSessionPath    = ".kb-session"
 	defaultUserPrefix     = "user"
 )
 
@@ -109,23 +109,24 @@ func generatePassword() (string, error) {
 //   - Returns a 405 Method Not Allowed if the method is not supported.
 //
 // TODO: Adapt this to be 'real' openAPI doc?
-func Session(c *gin.Context) {
+func Session(ctx *gin.Context) {
+	sdir := c.Cfg.SessionDir
 	cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
-	files, err := os.ReadDir(defaultSessionPath)
+	files, err := os.ReadDir(sdir)
 	if err != nil {
-		slog.Error("Failed to read from session directory", "dir", defaultSessionPath, "err", err)
-		c.String(http.StatusInternalServerError, "Failed to read from session directory %s: %v", defaultSessionPath, err)
+		slog.Error("Failed to read from session directory", "dir", sdir, "err", err)
+		ctx.String(http.StatusInternalServerError, "Failed to read from session directory %s: %v", sdir, err)
 		return
 	}
-	method := c.Request.Method
+	method := ctx.Request.Method
 	slog.Info("Handling request", "method", method)
 	if !(method == "GET" || method == "HEAD" || method == "DELETE" || method == "POST") {
-		c.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
+		ctx.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
 		return
 	}
-	sessionToken, _ := c.Cookie(cookieName)
+	sessionToken, _ := ctx.Cookie(cookieName)
 	if sessionToken != "" {
-		filePath := filepath.Join(defaultSessionPath, filepath.Clean(sessionToken)+".json")
+		filePath := filepath.Join(sdir, filepath.Clean(sessionToken)+".json")
 		// Delete (old) session on DELETE or when the user is requesting a new one via POST
 		if method == "DELETE" || method == "POST" {
 			slog.Info("Removing session file", "file", filePath, "reason", method)
@@ -134,9 +135,9 @@ func Session(c *gin.Context) {
 				if err != nil {
 					slog.Error("Failed to remove session", "file", filePath, "err", err)
 					//INFO: giving back the session token here (as part of the error message) defeats httponly cookies, keep that in mind
-					c.String(http.StatusInternalServerError, "Failed to remove session:", err)
+					ctx.String(http.StatusInternalServerError, "Failed to remove session:", err)
 				} else {
-					c.Status(http.StatusOK)
+					ctx.Status(http.StatusOK)
 				}
 				return
 			}
@@ -146,19 +147,19 @@ func Session(c *gin.Context) {
 			if err != nil {
 				//INFO: giving back the session token here defeats httponly cookies, keep that in mind
 				if method == "GET" {
-					c.String(http.StatusNotFound, "Failed to find session for token: %s", sessionToken)
+					ctx.String(http.StatusNotFound, "Failed to find session for token: %s", sessionToken)
 				} else {
-					c.Status(http.StatusNotFound)
+					ctx.Status(http.StatusNotFound)
 				}
 				return
 			} else {
 				if method == "GET" {
-					c.Data(http.StatusOK, "application/json", session_content)
+					ctx.Data(http.StatusOK, "application/json", session_content)
 					return
 				} else { //Only status code for HEAD requests
-					c.Status(http.StatusOK)
+					ctx.Status(http.StatusOK)
 					//TODO: HEAD request reported content legth is one off the actual length, see if this is a problem
-					c.Header("Content-Length", strconv.Itoa(len(session_content)))
+					ctx.Header("Content-Length", strconv.Itoa(len(session_content)))
 					//TODO: chack if we need some more 'manual' connection closing like
 					//c.Header("Connection", "close")
 					//c.Writer.Flush()
@@ -168,7 +169,7 @@ func Session(c *gin.Context) {
 			}
 		}
 	} else if method != "POST" {
-		c.String(http.StatusUnauthorized, "No session token was provided")
+		ctx.String(http.StatusUnauthorized, "No session token was provided")
 		return
 	}
 	if method == "POST" {
@@ -176,7 +177,7 @@ func Session(c *gin.Context) {
 		taken := make(map[int64]bool)
 		// check for extensions already taken and clean up old sessions
 		for _, file := range files {
-			filePath := filepath.Join(defaultSessionPath, file.Name())
+			filePath := filepath.Join(sdir, file.Name())
 			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 				session_content, err := os.ReadFile(filePath)
 				if err != nil {
@@ -227,17 +228,17 @@ func Session(c *gin.Context) {
 			password, err := generatePassword()
 			if err != nil {
 				slog.Error("Failed to generate secure password", "err", err)
-				c.String(http.StatusInternalServerError, "Failed to generate sercure Password:", err)
+				ctx.String(http.StatusInternalServerError, "Failed to generate sercure Password:", err)
 				return
 
 			} else {
 				new_session.Password = password
 				new_session.Timestamp = time.Now().Unix()
-				filePath := filepath.Join(defaultSessionPath, newSessionToken+".json")
+				filePath := filepath.Join(sdir, newSessionToken+".json")
 				file, err := os.Create(filePath)
 				if err != nil {
 					slog.Error("Error creating file", "file", filePath, "err", err)
-					c.String(http.StatusInternalServerError, "Error creating file:", err)
+					ctx.String(http.StatusInternalServerError, "Error creating file:", err)
 					return
 				}
 				defer file.Close()
@@ -248,7 +249,7 @@ func Session(c *gin.Context) {
 					slog.Error("Error encoding JSON", "err", err)
 					return
 				}
-				c.SetCookie(
+				ctx.SetCookie(
 					cookieName,
 					newSessionToken,
 					cookieMaxAge,
@@ -257,10 +258,10 @@ func Session(c *gin.Context) {
 					cookieSecure,
 					cookieHttpOnly,
 				)
-				c.JSON(http.StatusOK, new_session)
+				ctx.JSON(http.StatusOK, new_session)
 			}
 		} else {
-			c.String(http.StatusServiceUnavailable, "No more free sessions available")
+			ctx.String(http.StatusServiceUnavailable, "No more free sessions available")
 			return
 		}
 	}
