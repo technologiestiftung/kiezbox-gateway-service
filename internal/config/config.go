@@ -20,7 +20,7 @@ type GatewayConfig struct {
     DbBucket string `flag:"dbbucket" env:"INFLUXDB_BUCKET"`
     SerialDevice string `flag:"serial_dev" default:"/dev/ttyUSB0"`
     SerialBaud int `flag:"serial_baud" default:"115200"`
-    RetryInterval int `flag:"retry_interval" default:"60"`
+    RetryInterval time.Duration `flag:"retry_interval" default:"60s"`
     CacheDir string `flag:"cache_dir" default:".kb-dbcache"`
     DbTimeout time.Duration `flag:"db_timeout" default:"5s"`
     ApiPort string `flag:"api_port" default:"9080"`

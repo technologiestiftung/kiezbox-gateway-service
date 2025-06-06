@@ -88,7 +88,7 @@ func main() {
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
 
-	mts.Init(c.Cfg.SerialDevice, c.Cfg.SerialBaud, c.Cfg.RetryInterval, c.Cfg.ApiPort, meshtastic.CreateSerialPort, c.Cfg.CacheDir, c.Cfg.SessionDir)
+	mts.Init(meshtastic.CreateSerialPort)
 
 	// Initialize InfluxDB client
 	db_client := db.CreateClient()
