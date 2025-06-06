@@ -106,10 +106,10 @@ func main() {
 		Format:    "text",
 		Filename:  "",
 		AddSource: true,
+		ShortPath: true,
 	})
 
 	slog.Info("Logger initialized", "app", "kiezbox-gateway-service")
-	slog.Info("Service configuration", "cfg", gwConfig)
 	slog.Debug("Service configuration", "cfg", gwConfig)
 
 	// Initialize meshtastic serial connection

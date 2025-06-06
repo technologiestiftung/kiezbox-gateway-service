@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"path/filepath"
 	"log/slog"
 	"os"
 	"sync"
@@ -15,6 +16,7 @@ type LoggerConfig struct {
 	Format    string // Should be "text" or "json"
 	Filename  string // Empty for stdout
 	AddSource bool   // Whether to include source info in logs
+	ShortPath bool   // Print only filename is ource info logs
 }
 
 // InitLogger creates a slog.Logger instance and sets it as the default logger.
@@ -31,9 +33,20 @@ func InitLogger(cfg LoggerConfig) {
 		} else {
 			output = os.Stdout
 		}
+		replace := func(groups []string, a slog.Attr) slog.Attr {
+			// Remove the directory from the source's filename.
+			if a.Key == slog.SourceKey {
+				source := a.Value.Any().(*slog.Source)
+				source.File = filepath.Base(source.File)
+			}
+			return a
+		}
 		opts := &slog.HandlerOptions{
 			Level:     cfg.Level,
 			AddSource: cfg.AddSource,
+		}
+		if cfg.AddSource && cfg.ShortPath {
+			opts.ReplaceAttr = replace
 		}
 		var handler slog.Handler
 		switch cfg.Format {
