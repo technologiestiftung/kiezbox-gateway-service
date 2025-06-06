@@ -76,8 +76,8 @@ func main() {
 	logging.InitLogger(logging.LoggerConfig{
 		Level:     slog.Level(c.Cfg.LogLevel),
 		Format:    "text",
-		LogFile:  c.Cfg.LogFile,
-		LogToFile:  c.Cfg.LogToFile,
+		LogFile:   c.Cfg.LogFile,
+		LogToFile: c.Cfg.LogToFile,
 		AddSource: c.Cfg.LogSource,
 		ShortPath: c.Cfg.LogShortPath,
 	})

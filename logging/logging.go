@@ -1,9 +1,9 @@
 package logging
 
 import (
-	"path/filepath"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -14,10 +14,10 @@ var once sync.Once
 type LoggerConfig struct {
 	Level     slog.Leveler
 	Format    string // Should be "text" or "json"
-	LogFile  string // File to log to if LogToFile is set
-	LogToFile  bool
-	AddSource bool   // Whether to include source info in logs
-	ShortPath bool   // Print only filename is ource info logs
+	LogFile   string // File to log to if LogToFile is set
+	LogToFile bool
+	AddSource bool // Whether to include source info in logs
+	ShortPath bool // Print only filename is ource info logs
 }
 
 // InitLogger creates a slog.Logger instance and sets it as the default logger.

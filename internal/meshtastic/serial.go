@@ -41,21 +41,21 @@ type SerialPort interface {
 type PortFactory func(*serial.Config) (SerialPort, error)
 
 func CreateSerialPort(conf *serial.Config) (SerialPort, error) {
-    return serial.OpenPort(conf)
+	return serial.OpenPort(conf)
 }
 
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
-	conf          *serial.Config
-	port          SerialPort
-	config_id     uint32
-	ToChan        chan *generated.ToRadio
-	FromChan      chan *generated.FromRadio
-	KBChan        chan *generated.KiezboxMessage
-	ConfigChan    chan *generated.AdminMessage
-	MyInfo        *generated.MyNodeInfo
-	WaitInfo      sync.WaitGroup
-	portFactory   PortFactory
+	conf        *serial.Config
+	port        SerialPort
+	config_id   uint32
+	ToChan      chan *generated.ToRadio
+	FromChan    chan *generated.FromRadio
+	KBChan      chan *generated.KiezboxMessage
+	ConfigChan  chan *generated.AdminMessage
+	MyInfo      *generated.MyNodeInfo
+	WaitInfo    sync.WaitGroup
+	portFactory PortFactory
 }
 
 func interfaceIsNil(i interface{}) bool {

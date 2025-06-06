@@ -149,7 +149,7 @@ func Asterisk(ctx *gin.Context) {
 	if is_single {
 		id, found := ctx.GetPostForm("id")
 		if found {
-			session, err := getSession(id,c.Cfg.SessionDir)
+			session, err := getSession(id, c.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *session)
 			} else {
@@ -167,7 +167,7 @@ func Asterisk(ctx *gin.Context) {
 		idLike, found := ctx.GetPostForm("id LIKE")
 		if found {
 			idLikeRegex := "^" + strings.ReplaceAll(strings.ReplaceAll(idLike, "%", ".*"), "_", ".") + "$"
-			matched_sessions, err := getSessions(idLikeRegex,c.Cfg.SessionDir)
+			matched_sessions, err := getSessions(idLikeRegex, c.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *matched_sessions...)
 			} else {

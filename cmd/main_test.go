@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/tarm/serial"
 
+	c "kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
-	c "kiezbox/internal/config"
 )
 
 // Mocks

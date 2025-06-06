@@ -1,8 +1,8 @@
 package db
 
 import (
-	c "kiezbox/internal/config"
 	"context"
+	c "kiezbox/internal/config"
 	"log"
 	"time"
 
