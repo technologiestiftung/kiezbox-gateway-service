@@ -337,8 +337,8 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 					protobufMsg := buffer.Bytes()[4 : 4+protoLen]
 
 					// Log Protobuf frame details for debugging.
-					slog.Info("Protobuf frame detected", "length", protoLen)
-					slog.Info("Protobuf frame", "hex", fmt.Sprintf("%x", protobufMsg))
+					slog.Debug("Protobuf frame detected", "length", protoLen)
+					slog.Debug("Protobuf frame", "hex", fmt.Sprintf("%x", protobufMsg))
 					var fromRadio generated.FromRadio
 					err := proto.Unmarshal(protobufMsg, &fromRadio)
 					if err != nil {

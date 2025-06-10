@@ -29,6 +29,7 @@ type MeshtasticDevice interface {
 // RunGoroutines orchestrates the goroutines that run the service.
 func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, db_client *db.InfluxDB) {
 	// Launch goroutines
+	//TODO: refactor this function, as it is a little clumsy with all the manual waitgroup stuff
 	wg.Add(1)
 	go device.Writer(ctx, wg)
 	wg.Add(1)
@@ -68,10 +69,6 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 }
 
 func main() {
-	//Configuration value priority:
-	// 1. cli argurments
-	// 2. environment variables
-	// 3. default values
 	c.LoadConfig()
 	logging.InitLogger(logging.LoggerConfig{
 		Level:     slog.Level(c.Cfg.LogLevel),
