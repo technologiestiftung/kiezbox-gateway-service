@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,20 +15,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func uci_get(key string) (string, error) {
-	output, err := exec.Command("uci", "get", key).Output()
-	if err != nil {
-		slog.Error("uci_get error", "err", err)
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
 type SipUser struct {
 	username string
 	password string
 	callerid string
 }
+
+const (
+	defaultUserPrefix = "user"
+)
 
 func idToExt(id int64) string {
 	return fmt.Sprintf("%s%04d", defaultUserPrefix, id)
@@ -38,11 +32,11 @@ func idToExt(id int64) string {
 func idToCid(id int64) string {
 	//TODO: callerid can't contain spaces (or probably other special characters) currently
 	// as url.Values.Encode() encodes it like "application/x-www-form-urlencoded"
-	// but the asterisk curl backend despite documentation suggesting it does not parse this encoding correctly
+	// but the asterisk curl backend (despite documentation suggesting it) does not parse this encoding correctly
 	// https://docs.asterisk.org/Configuration/Interfaces/Back-end-Database-and-Realtime-Connectivity/cURL/
 	// at least '+' chars as spaces are not decoded correctly and everything before the last '<' char is used as first part of the called id
-	basenr, err := uci_get("kb.main.trunk_base")
-	if err != nil {
+	basenr := c.Cfg.SipTrunkBase
+	if basenr == "2" {
 		return fmt.Sprintf("2%d<2%d>", id, id)
 	} else {
 		return fmt.Sprintf("00%s2%d<00%s>", basenr, id, basenr)

@@ -30,6 +30,12 @@ type GatewayConfig struct {
 	LogToFile     bool          `flag:"log_tofile" default:"false"`
 	LogSource     bool          `flag:"log_source" default:"true"`
 	LogShortPath  bool          `flag:"log_shortpath" default:"true"`
+	SipTrunkBase  string        `uci:"trunk_base" env:"SIP_TRUNK_BASE" default:"2"`
+	BoxLat        float32       `uci:"geo_lat" env:"BOX_LAT" default:"0"`
+	BoxLon        float32       `uci:"geo_lon" env:"BOX_LON" default:"0"`
+	Mode          int           `uci:"mode" env:"KB_MODE" default:"0"`
+	ModeOverride  bool          `uci:"mode_override" env:"KB_MODE_OVERRIDE" default:"false"`
+	CorsLocalhost bool          `uci:"cors_localhost" env:"CORS_LOCALHOST" default:"false"`
 }
 
 // Global gateway service config
@@ -54,9 +60,15 @@ func loadConfig(nofail bool) {
 		if err != nil {
 			log.Printf("Failed loading %s.env file: %v", cwd, err)
 		}
+		//Configuration value priority:
+		// 1. cli argurments
+		// 2. uci values
+		// 3. environment variables
+		// 4. default values
 		configurator := configuration.New(
 			&Cfg,
 			configuration.NewFlagProvider(),
+			NewUciProvider("kb.main."),
 			configuration.NewEnvProvider(),
 			configuration.NewDefaultProvider(),
 		)
