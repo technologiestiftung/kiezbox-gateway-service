@@ -24,56 +24,14 @@ const (
 	defaultCookieMaxAge   = 86400
 	defaultCookiePath     = "/"
 	defaultCookieDomain   = ""
-	defaultCookieSecure   = false
+	defaultCookieSecure   = true
 	defaultCookieHttpOnly = true
-	defaultUserPrefix     = "user"
 )
 
 type sipSession struct {
 	Extension int64  `json:"extension"`
 	Password  string `json:"password"`
 	Timestamp int64  `json:"timestamp"`
-}
-
-// getCookieSettings retrieves cookie settings from environment variables
-func getCookieSettings() (name string, maxAge int, path string, domain string, secure bool, httpOnly bool) {
-	name = os.Getenv("COOKIE_NAME")
-	if name == "" {
-		name = defaultCookieName
-	}
-
-	maxAgeStr := os.Getenv("COOKIE_MAX_AGE")
-	maxAge = defaultCookieMaxAge
-	if maxAgeStr != "" {
-		if val, err := strconv.Atoi(maxAgeStr); err == nil {
-			maxAge = val
-		}
-	}
-
-	path = os.Getenv("COOKIE_PATH")
-	if path == "" {
-		path = defaultCookiePath
-	}
-
-	domain = os.Getenv("COOKIE_DOMAIN")
-	if domain == "" {
-		domain = defaultCookieDomain
-	}
-
-	secureStr := os.Getenv("COOKIE_SECURE")
-	secure = defaultCookieSecure
-	if secureStr == "true" || secureStr == "1" {
-		secure = true
-	}
-
-	// Get cookie httpOnly flag from env or use default
-	httpOnlyStr := os.Getenv("COOKIE_HTTP_ONLY")
-	httpOnly = defaultCookieHttpOnly
-	if httpOnlyStr == "false" || httpOnlyStr == "0" {
-		httpOnly = false
-	}
-
-	return
 }
 
 func generatePassword() (string, error) {
@@ -111,7 +69,6 @@ func generatePassword() (string, error) {
 // TODO: Adapt this to be 'real' openAPI doc?
 func Session(ctx *gin.Context) {
 	sdir := c.Cfg.SessionDir
-	cookieName, cookieMaxAge, cookiePath, cookieDomain, cookieSecure, cookieHttpOnly := getCookieSettings()
 	files, err := os.ReadDir(sdir)
 	if err != nil {
 		slog.Error("Failed to read from session directory", "dir", sdir, "err", err)
@@ -124,7 +81,7 @@ func Session(ctx *gin.Context) {
 		ctx.String(http.StatusMethodNotAllowed, "Method %s not allowed", method)
 		return
 	}
-	sessionToken, _ := ctx.Cookie(cookieName)
+	sessionToken, _ := ctx.Cookie(defaultCookieName)
 	if sessionToken != "" {
 		filePath := filepath.Join(sdir, filepath.Clean(sessionToken)+".json")
 		// Delete (old) session on DELETE or when the user is requesting a new one via POST
@@ -250,13 +207,13 @@ func Session(ctx *gin.Context) {
 					return
 				}
 				ctx.SetCookie(
-					cookieName,
+					defaultCookieName,
 					newSessionToken,
-					cookieMaxAge,
-					cookiePath,
-					cookieDomain,
-					cookieSecure,
-					cookieHttpOnly,
+					defaultCookieMaxAge,
+					defaultCookiePath,
+					defaultCookieDomain,
+					defaultCookieSecure,
+					defaultCookieHttpOnly,
 				)
 				ctx.JSON(http.StatusOK, new_session)
 			}
@@ -265,29 +222,4 @@ func Session(ctx *gin.Context) {
 			return
 		}
 	}
-}
-
-// TODO: move environment variables to some global state
-// and maybe have them retrieved from some central system/uci config
-func SIPConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"kbServerAddress": os.Getenv("KB_SERVER_ADDRESS"),
-		"kbWSSPort":       getIntEnv("KB_WSS_PORT", 8089),
-		"kbWSSPath":       os.Getenv("KB_WSS_PATH"),
-		"kbDomain":        os.Getenv("KB_DOMAIN"),
-		"kbUserPrefix":    defaultUserPrefix,
-	})
-}
-
-// Helper function to get integer environment variables with fallback
-func getIntEnv(key string, fallback int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
-	}
-	intValue, err := strconv.Atoi(value)
-	if err != nil {
-		return fallback
-	}
-	return intValue
 }

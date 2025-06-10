@@ -2,12 +2,12 @@ package routes
 
 import (
 	"kiezbox/api/handlers"
+	c "kiezbox/internal/config"
 
 	"github.com/gin-gonic/gin"
 )
 
 func CORSMiddleware() gin.HandlerFunc {
-	//TODO: Cors middleware only used to make local tests work. make this toggled by cli/build flag
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -24,10 +24,12 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 func RegisterRoutes(r *gin.Engine) {
-	// Register the hello world route
-	r.Use(CORSMiddleware())
+	// Use Corse middlewar only for local testing
+	if c.Cfg.CorsLocalhost {
+		r.Use(CORSMiddleware())
+	}
 	r.GET("/mode", handlers.Mode)
+	r.GET("/info", handlers.Info)
 	r.Any("/session", handlers.Session)
-	r.GET("/sipconfig", handlers.SIPConfig)
 	r.POST("/asterisk/:pstype/:singlemulti", handlers.Asterisk)
 }
