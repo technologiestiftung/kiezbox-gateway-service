@@ -82,3 +82,27 @@ You can send API requests using cURL:
 ```
 curl -X GET http://localhost:9080/mode
 ```
+
+## Logging
+
+This project uses Go's [log/slog](https://pkg.go.dev/log/slog) package for all logging.  
+The logger is initialized at startup and set as the default, so you can use `slog.Info`, `slog.Error`, etc., anywhere in the codebase.
+
+- **Always use structured logging:**  
+  Use key-value pairs to provide context for each log message.
+- **Log errors with the `"err"` key:**  
+  Always include the error object with the key `"err"` for error logs.
+- **Use clear, descriptive parameter names** for context (e.g., `"userID"`, `"file"`, `"id"`, `"request"`).
+- **Do not use** `fmt.Println` or `log.Println` for application logs.
+
+**Example log call:**
+```go
+slog.Error("Failed to open file", "file", filePath, "err", err)
+```
+
+**Example output (text format):**
+```
+time=2025-05-28T13:37:01.456Z level=ERROR msg="Failed to open file" file="/tmp/session1.json" err="open /tmp/session1.json: no such file or directory" source=api/handlers/asterisk.go:42
+```
+
+See `logging/logging.go` for configuration details.

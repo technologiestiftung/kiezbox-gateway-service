@@ -9,6 +9,8 @@ import (
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/meshtastic"
+	"kiezbox/logging"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -80,6 +82,15 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 }
 
 func main() {
+	logging.InitLogger(logging.LoggerConfig{
+		Level:     slog.LevelInfo,
+		Format:    "text",
+		Filename:  "",
+		AddSource: true,
+	})
+
+	slog.Info("Logger initialized", "app", "kiezbox-gateway-service")
+
 	flag_settime := flag.Bool("settime", false, "Sets the RTC time to the system time at service startup")
 	flag_dbwriter := flag.Bool("dbwriter", false, "Tells the service to run the dbwriter routine")
 	flag_dbretry := flag.Bool("dbretry", false, "Tells the service to run the dbretry routine")
