@@ -19,7 +19,6 @@ import (
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 
-	"kiezbox/api/routes"
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
@@ -596,15 +595,9 @@ func (mts *MTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 // APIHandler starts the API for the Kiezbox Gateway Service.
-func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
-
-	// Create a new Gin router
-	r := gin.Default()
-
-	// Register API routes
-	routes.RegisterRoutes(r)
 
 	// Configure the HTTP server
 	server := &http.Server{

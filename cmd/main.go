@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"kiezbox/api/routes"
 	"kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tarm/serial"
 )
 
@@ -27,7 +29,7 @@ type MeshtasticDevice interface {
 	SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control)
 	GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
 	ConfigWriter(ctx context.Context, wg *sync.WaitGroup)
-	APIHandler(ctx context.Context, wg *sync.WaitGroup)
+	APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine)
 }
 
 // RunGoroutines orchestrates the goroutines that run the service.
@@ -70,7 +72,11 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 
 	// Start the API in its own goroutine
 	wg.Add(1)
-	go device.APIHandler(ctx, wg)
+	// Create a new Gin router
+	r := gin.Default()
+	// Register API routes
+	routes.RegisterRoutes(r, device.(*meshtastic.MTSerial), ctx, wg)
+	go device.APIHandler(ctx, wg, r)
 }
 
 func main() {

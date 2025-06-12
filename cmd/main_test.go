@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/mock"
 	"github.com/tarm/serial"
 
@@ -79,7 +80,7 @@ func (m *MockMTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine) {
 	m.Called(ctx, wg)
 	wg.Done()
 }
@@ -99,7 +100,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.On("SetKiezboxValues", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second)).Return(nil)
 	mockMTSerial.On("ConfigWriter", mock.Anything, mock.Anything).Return(nil)
-	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return mockMTSerial, nil
@@ -137,7 +138,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "SetKiezboxValues", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second))
 	mockMTSerial.AssertCalled(t, "ConfigWriter", mock.Anything, mock.Anything)
-	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything, mock.Anything)
 
 	// Wait for all goroutines to finish
 	wg.Wait()
