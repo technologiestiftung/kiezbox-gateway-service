@@ -173,7 +173,7 @@ func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, c
 	// Marshal the Kiezbox message
 	kiezboxData, err := proto.Marshal(kiezboxMessage)
 	if err != nil {
-		log.Printf("Failed to marshal KiezboxMessage: %v", err)
+		slog.Error("Failed to marshal KiezboxMessage", "err", err)
 	}
 
 	// Create the Data message
@@ -199,7 +199,7 @@ func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, c
 		},
 	}
 
-	log.Printf("Setting Kiezbox values: %+v\n", control)
+	slog.Info("Setting Kiezbox values: %+v\n", control)
 
 	// Check if the context has been canceled before attempting to write
 	select {
