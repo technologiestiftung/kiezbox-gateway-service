@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/tarm/serial"
 
+	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
 )
@@ -84,6 +85,9 @@ func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func TestRunGoroutines(t *testing.T) {
+	// Load default config values
+	// We may (need to) overwrite some config for testing
+	cfg.LoadConfigNoFail()
 	// Setup
 	mockMTSerial := &MockMTSerial{}
 	mockMTSerial.On("Write", mock.Anything).Return(0, nil)
@@ -104,14 +108,11 @@ func TestRunGoroutines(t *testing.T) {
 		return mockMTSerial, nil
 	}
 
-	flag_settime := true
-	flag_dbwriter := true
-	flag_dbretry := true
 	db_client := &db.InfluxDB{} // Mocked or a real one if needed
 
 	// Initialize with a mock serial port
 	var mts meshtastic.MTSerial
-	mts.Init("/dev/mockTTYUSB0", 115200, 10, "8000", portFactory, ".kb-dbcache", ".kb-session")
+	mts.Init(portFactory)
 
 	// Create a context with cancel
 	ctx, cancel := context.WithCancel(context.Background())
@@ -120,7 +121,7 @@ func TestRunGoroutines(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Run the function under test
-	RunGoroutines(ctx, &wg, mockMTSerial, flag_settime, flag_dbwriter, flag_dbretry, db_client)
+	RunGoroutines(ctx, &wg, mockMTSerial, db_client)
 
 	// Cancel the context after a small interval
 	time.Sleep(time.Millisecond * 1)
