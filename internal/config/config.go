@@ -44,10 +44,15 @@ var Cfg GatewayConfig
 // Make sure that the config is only loaded once
 var once sync.Once
 
+// Wrapper to load configuration from different sources
+// Fails if a config option could not be loaded from any source
 func LoadConfig() {
 	loadConfig(false)
 }
 
+// Similar wrapper, but does not fail if configuration options are missing
+// mainly used in unit tests, where the environment may be different
+// Warnings are printed for missing options
 func LoadConfigNoFail() {
 	loadConfig(true)
 }
