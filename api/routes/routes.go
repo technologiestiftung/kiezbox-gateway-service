@@ -1,7 +1,10 @@
 package routes
 
 import (
+	"context"
 	"kiezbox/api/handlers"
+	"kiezbox/internal/meshtastic"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,11 +26,12 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func RegisterRoutes(r *gin.Engine) {
+func RegisterRoutes(r *gin.Engine, mts *meshtastic.MTSerial, ctx context.Context, wg *sync.WaitGroup) {
 	// Register the hello world route
 	r.Use(CORSMiddleware())
-	r.GET("/mode", handlers.Mode)
+	r.GET("/mode", handlers.GetMode)
 	r.Any("/session", handlers.Session)
 	r.GET("/sipconfig", handlers.SIPConfig)
 	r.POST("/asterisk/:pstype/:singlemulti", handlers.Asterisk)
+	r.POST("/mode/:mode", handlers.SetMode(mts, ctx, wg))
 }
