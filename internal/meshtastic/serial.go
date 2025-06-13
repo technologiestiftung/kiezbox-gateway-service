@@ -163,6 +163,7 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 // Pass a pointer to generated.KiezboxMessage_Control with the desired fields set.
 func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
 	mts.WaitInfo.Wait()
+	slog.Info("Setting Kiezbox values:", "control", control)
 	defer wg.Done()
 
 	// Create the Kiezbox message with the provided control fields
@@ -199,7 +200,6 @@ func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, c
 		},
 	}
 
-	slog.Info("Setting Kiezbox values: %+v\n", control)
 
 	// Check if the context has been canceled before attempting to write
 	select {
