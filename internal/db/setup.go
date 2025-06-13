@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"log"
 	"time"
 
@@ -22,7 +22,7 @@ type InfluxDB struct {
 // CreateClient initializes the InfluxDB client and APIs
 func CreateClient() *InfluxDB {
 	// Create a new InfluxDB client
-	client := influxdb.NewClient(c.Cfg.DbUrl, c.Cfg.DbToken)
+	client := influxdb.NewClient(cfg.Cfg.DbUrl, cfg.Cfg.DbToken)
 
 	// Check if the client is working
 	_, err := client.Health(context.Background())
@@ -31,16 +31,16 @@ func CreateClient() *InfluxDB {
 	}
 
 	// Initialize WriteAPI and QueryAPI once
-	writeAPI := client.WriteAPIBlocking(c.Cfg.DbOrg, c.Cfg.DbBucket)
-	queryAPI := client.QueryAPI(c.Cfg.DbOrg)
+	writeAPI := client.WriteAPIBlocking(cfg.Cfg.DbOrg, cfg.Cfg.DbBucket)
+	queryAPI := client.QueryAPI(cfg.Cfg.DbOrg)
 
 	return &InfluxDB{
 		Client:   client,
 		WriteAPI: writeAPI,
 		QueryAPI: queryAPI,
-		Org:      c.Cfg.DbOrg,
-		Bucket:   c.Cfg.DbBucket,
-		Timeout:  c.Cfg.DbTimeout,
+		Org:      cfg.Cfg.DbOrg,
+		Bucket:   cfg.Cfg.DbBucket,
+		Timeout:  cfg.Cfg.DbTimeout,
 	}
 }
 

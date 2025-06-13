@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"log/slog"
 	mathRand "math/rand"
 	"net/http"
@@ -68,7 +68,7 @@ func generatePassword() (string, error) {
 //
 // TODO: Adapt this to be 'real' openAPI doc?
 func Session(ctx *gin.Context) {
-	sdir := c.Cfg.SessionDir
+	sdir := cfg.Cfg.SessionDir
 	files, err := os.ReadDir(sdir)
 	if err != nil {
 		slog.Error("Failed to read from session directory", "dir", sdir, "err", err)

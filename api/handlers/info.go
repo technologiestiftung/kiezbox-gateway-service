@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +11,7 @@ import (
 // Currently returns box location (lon,lat)
 func Info(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
-		"lon": c.Cfg.BoxLon,
-		"lat": c.Cfg.BoxLat,
+		"lon": cfg.Cfg.BoxLon,
+		"lat": cfg.Cfg.BoxLat,
 	})
 }

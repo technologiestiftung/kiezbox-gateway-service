@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/tarm/serial"
 
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
 )
@@ -87,7 +87,7 @@ func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 func TestRunGoroutines(t *testing.T) {
 	// Load default config values
 	// We may (need to) overwrite some config for testing
-	c.LoadConfigNoFail()
+	cfg.LoadConfigNoFail()
 	// Setup
 	mockMTSerial := &MockMTSerial{}
 	mockMTSerial.On("Write", mock.Anything).Return(0, nil)

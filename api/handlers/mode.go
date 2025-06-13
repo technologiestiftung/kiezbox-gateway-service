@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"math/rand"
 	"net/http"
 
@@ -16,8 +16,8 @@ import (
 // @Router /mode [get]
 func Mode(ctx *gin.Context) {
 	var mode int
-	if c.Cfg.ModeOverride {
-		mode = c.Cfg.Mode
+	if cfg.Cfg.ModeOverride {
+		mode = cfg.Cfg.Mode
 	} else {
 		//TODO: implement retrieving real mode
 		// random number for demonstration purposes 1-3

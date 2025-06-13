@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/meshtastic"
 	"kiezbox/logging"
@@ -43,14 +43,14 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	wg.Add(1)
 	go device.ConfigWriter(ctx, wg)
 
-	if c.Cfg.SetTime {
+	if cfg.Cfg.SetTime {
 		// We wait for the not info to set the time
 		wg.Add(1)
 		go device.Settime(ctx, wg, time.Now().Unix())
 	}
 
 	// Process incoming KiexBox messages in its own goroutine
-	if c.Cfg.DbWriter {
+	if cfg.Cfg.DbWriter {
 		wg.Add(1)
 		go device.DBWriter(ctx, wg, db_client)
 		// } else {
@@ -58,7 +58,7 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	}
 
 	// Start the retry mechanism in its own goroutine
-	if c.Cfg.DbRetry {
+	if cfg.Cfg.DbRetry {
 		wg.Add(1)
 		go device.DBRetry(ctx, wg, db_client)
 	}
@@ -69,18 +69,18 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 }
 
 func main() {
-	c.LoadConfig()
+	cfg.LoadConfig()
 	logging.InitLogger(logging.LoggerConfig{
-		Level:     slog.Level(c.Cfg.LogLevel),
+		Level:     slog.Level(cfg.Cfg.LogLevel),
 		Format:    "text",
-		LogFile:   c.Cfg.LogFile,
-		LogToFile: c.Cfg.LogToFile,
-		AddSource: c.Cfg.LogSource,
-		ShortPath: c.Cfg.LogShortPath,
+		LogFile:   cfg.Cfg.LogFile,
+		LogToFile: cfg.Cfg.LogToFile,
+		AddSource: cfg.Cfg.LogSource,
+		ShortPath: cfg.Cfg.LogShortPath,
 	})
 
 	slog.Info("Logger initialized", "app", "kiezbox-gateway-service")
-	slog.Debug("Service configuration", "cfg", c.Cfg)
+	slog.Debug("Service configuration", "cfg", cfg.Cfg)
 
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial

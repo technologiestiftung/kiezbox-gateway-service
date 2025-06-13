@@ -2,7 +2,7 @@ package routes
 
 import (
 	"kiezbox/api/handlers"
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,7 +25,7 @@ func CORSMiddleware() gin.HandlerFunc {
 
 func RegisterRoutes(r *gin.Engine) {
 	// Use Corse middlewar only for local testing
-	if c.Cfg.CorsLocalhost {
+	if cfg.Cfg.CorsLocalhost {
 		r.Use(CORSMiddleware())
 	}
 	r.GET("/mode", handlers.Mode)

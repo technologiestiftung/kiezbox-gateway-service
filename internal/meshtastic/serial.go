@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"kiezbox/api/routes"
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
@@ -73,8 +73,8 @@ func (mts *MTSerial) Init(portFactory PortFactory) {
 	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
-		Name: c.Cfg.SerialDevice,
-		Baud: c.Cfg.SerialBaud,
+		Name: cfg.Cfg.SerialDevice,
+		Baud: cfg.Cfg.SerialBaud,
 	}
 	mts.portFactory = portFactory
 	var err = mts.Open()
@@ -378,7 +378,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if !databaseConnected {
 				// Cache the message if database is not connected
 				slog.Warn("No database connection. Caching point.", "err", err)
-				db.WritePointToFile(message, c.Cfg.CacheDir)
+				db.WritePointToFile(message, cfg.Cfg.CacheDir)
 				continue
 			}
 
@@ -394,7 +394,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					slog.Warn("No connection to database, caching point.")
-					db.WritePointToFile(message, c.Cfg.CacheDir)
+					db.WritePointToFile(message, cfg.Cfg.CacheDir)
 
 				} else {
 					slog.Error("Unexpected error", "err", err)
@@ -412,7 +412,7 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 	defer wg.Done()
 
 	// Do retry every mts.retryTime seconds
-	ticker := time.NewTicker(c.Cfg.RetryInterval)
+	ticker := time.NewTicker(cfg.Cfg.RetryInterval)
 	defer ticker.Stop()
 
 	for {
@@ -426,7 +426,7 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 
 			if databaseConnected {
 				slog.Info("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(c.Cfg.CacheDir)
+				db_client.RetryCachedPoints(cfg.Cfg.CacheDir)
 
 			} else {
 				slog.Warn("No database connection. Skipping retry.", "err", err)
@@ -536,7 +536,7 @@ func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Configure the HTTP server
 	server := &http.Server{
-		Addr:    fmt.Sprintf("localhost:%s", c.Cfg.ApiPort),
+		Addr:    fmt.Sprintf("localhost:%s", cfg.Cfg.ApiPort),
 		Handler: r,
 	}
 

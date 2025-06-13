@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	c "kiezbox/internal/config"
+	cfg "kiezbox/internal/config"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -35,7 +35,7 @@ func idToCid(id int64) string {
 	// but the asterisk curl backend (despite documentation suggesting it) does not parse this encoding correctly
 	// https://docs.asterisk.org/Configuration/Interfaces/Back-end-Database-and-Realtime-Connectivity/cURL/
 	// at least '+' chars as spaces are not decoded correctly and everything before the last '<' char is used as first part of the called id
-	basenr := c.Cfg.SipTrunkBase
+	basenr := cfg.Cfg.SipTrunkBase
 	if basenr == "2" {
 		return fmt.Sprintf("2%d<2%d>", id, id)
 	} else {
@@ -143,7 +143,7 @@ func Asterisk(ctx *gin.Context) {
 	if is_single {
 		id, found := ctx.GetPostForm("id")
 		if found {
-			session, err := getSession(id, c.Cfg.SessionDir)
+			session, err := getSession(id, cfg.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *session)
 			} else {
@@ -161,7 +161,7 @@ func Asterisk(ctx *gin.Context) {
 		idLike, found := ctx.GetPostForm("id LIKE")
 		if found {
 			idLikeRegex := "^" + strings.ReplaceAll(strings.ReplaceAll(idLike, "%", ".*"), "_", ".") + "$"
-			matched_sessions, err := getSessions(idLikeRegex, c.Cfg.SessionDir)
+			matched_sessions, err := getSessions(idLikeRegex, cfg.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *matched_sessions...)
 			} else {
