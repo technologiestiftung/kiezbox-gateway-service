@@ -84,6 +84,7 @@ func (mts *MTSerial) MessageHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 // debugPrintProtobuf takes a protobuf message and prints it in a pretty way for debugging
 func debugPrintProtobuf(message proto.Message) {
+	//TODO: convert this into a 'tostring' function and use the string with slog as needed at caller location
 	// Convert the Protobuf message to text format
 	textData, err := prototext.MarshalOptions{
 		Multiline: true, // Use multiline output for readability

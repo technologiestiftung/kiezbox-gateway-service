@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"kiezbox/api/routes"
+	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
@@ -37,24 +38,24 @@ type SerialPort interface {
 	io.ReadWriteCloser
 }
 
-type portFactory func(*serial.Config) (SerialPort, error)
+type PortFactory func(*serial.Config) (SerialPort, error)
+
+func CreateSerialPort(conf *serial.Config) (SerialPort, error) {
+	return serial.OpenPort(conf)
+}
 
 // MTSerial represents a connection to a meshtastic device via serial
 type MTSerial struct {
-	conf          *serial.Config
-	port          SerialPort
-	config_id     uint32
-	ToChan        chan *generated.ToRadio
-	FromChan      chan *generated.FromRadio
-	KBChan        chan *generated.KiezboxMessage
-	ConfigChan    chan *generated.AdminMessage
-	MyInfo        *generated.MyNodeInfo
-	WaitInfo      sync.WaitGroup
-	portFactory   portFactory
-	retryTime     int
-	apiPort       string
-	cacheDir      string
-	apiSessionDir string
+	conf        *serial.Config
+	port        SerialPort
+	config_id   uint32
+	ToChan      chan *generated.ToRadio
+	FromChan    chan *generated.FromRadio
+	KBChan      chan *generated.KiezboxMessage
+	ConfigChan  chan *generated.AdminMessage
+	MyInfo      *generated.MyNodeInfo
+	WaitInfo    sync.WaitGroup
+	portFactory PortFactory
 }
 
 func interfaceIsNil(i interface{}) bool {
@@ -64,7 +65,7 @@ func interfaceIsNil(i interface{}) bool {
 // Init initializes the serial device of an MTSerial object
 // and also sends the necessary initial radioConfig protobuf packet
 // to start the communication with the meshtastic serial device
-func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, portFactory portFactory, cacheDir string, api_sessiondir string) {
+func (mts *MTSerial) Init(portFactory PortFactory) {
 	mts.FromChan = make(chan *generated.FromRadio, 10)
 	mts.ToChan = make(chan *generated.ToRadio, 10)
 	mts.KBChan = make(chan *generated.KiezboxMessage, 10)
@@ -72,14 +73,10 @@ func (mts *MTSerial) Init(dev string, baud int, retryTime int, apiPort string, p
 	mts.WaitInfo.Add(1)
 	mts.config_id = rand.Uint32()
 	mts.conf = &serial.Config{
-		Name: dev,
-		Baud: baud,
+		Name: cfg.Cfg.SerialDevice,
+		Baud: cfg.Cfg.SerialBaud,
 	}
 	mts.portFactory = portFactory
-	mts.retryTime = retryTime
-	mts.apiPort = apiPort
-	mts.cacheDir = cacheDir
-	mts.apiSessionDir = api_sessiondir
 	var err = mts.Open()
 	if err != nil {
 		slog.Info("Serial port not available yet. Reader will retry opening it.")
@@ -340,8 +337,8 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 					protobufMsg := buffer.Bytes()[4 : 4+protoLen]
 
 					// Log Protobuf frame details for debugging.
-					slog.Info("Protobuf frame detected", "length", protoLen)
-					slog.Info("Protobuf frame", "hex", fmt.Sprintf("%x", protobufMsg))
+					slog.Debug("Protobuf frame detected", "length", protoLen)
+					slog.Debug("Protobuf frame", "hex", fmt.Sprintf("%x", protobufMsg))
 					var fromRadio generated.FromRadio
 					err := proto.Unmarshal(protobufMsg, &fromRadio)
 					if err != nil {
@@ -381,7 +378,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if !databaseConnected {
 				// Cache the message if database is not connected
 				slog.Warn("No database connection. Caching point.", "err", err)
-				db.WritePointToFile(message, mts.cacheDir)
+				db.WritePointToFile(message, cfg.Cfg.CacheDir)
 				continue
 			}
 
@@ -397,7 +394,7 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					slog.Warn("No connection to database, caching point.")
-					db.WritePointToFile(message, mts.cacheDir)
+					db.WritePointToFile(message, cfg.Cfg.CacheDir)
 
 				} else {
 					slog.Error("Unexpected error", "err", err)
@@ -415,7 +412,7 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 	defer wg.Done()
 
 	// Do retry every mts.retryTime seconds
-	ticker := time.NewTicker(time.Duration(mts.retryTime) * time.Second)
+	ticker := time.NewTicker(cfg.Cfg.RetryInterval)
 	defer ticker.Stop()
 
 	for {
@@ -429,7 +426,7 @@ func (mts *MTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client 
 
 			if databaseConnected {
 				slog.Info("Database connected, retrying cached points.")
-				db_client.RetryCachedPoints(mts.cacheDir)
+				db_client.RetryCachedPoints(cfg.Cfg.CacheDir)
 
 			} else {
 				slog.Warn("No database connection. Skipping retry.", "err", err)
@@ -539,7 +536,7 @@ func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
 
 	// Configure the HTTP server
 	server := &http.Server{
-		Addr:    fmt.Sprintf("localhost:%s", mts.apiPort),
+		Addr:    fmt.Sprintf("localhost:%s", cfg.Cfg.ApiPort),
 		Handler: r,
 	}
 

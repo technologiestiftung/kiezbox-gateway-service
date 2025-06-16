@@ -3,11 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	cfg "kiezbox/internal/config"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,20 +15,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func uci_get(key string) (string, error) {
-	output, err := exec.Command("uci", "get", key).Output()
-	if err != nil {
-		slog.Error("uci_get error", "err", err)
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
 type SipUser struct {
 	username string
 	password string
 	callerid string
 }
+
+const (
+	defaultUserPrefix = "user"
+)
 
 func idToExt(id int64) string {
 	return fmt.Sprintf("%s%04d", defaultUserPrefix, id)
@@ -37,24 +32,24 @@ func idToExt(id int64) string {
 func idToCid(id int64) string {
 	//TODO: callerid can't contain spaces (or probably other special characters) currently
 	// as url.Values.Encode() encodes it like "application/x-www-form-urlencoded"
-	// but the asterisk curl backend despite documentation suggesting it does not parse this encoding correctly
+	// but the asterisk curl backend (despite documentation suggesting it) does not parse this encoding correctly
 	// https://docs.asterisk.org/Configuration/Interfaces/Back-end-Database-and-Realtime-Connectivity/cURL/
 	// at least '+' chars as spaces are not decoded correctly and everything before the last '<' char is used as first part of the called id
-	basenr, err := uci_get("kb.main.trunk_base")
-	if err != nil {
+	basenr := cfg.Cfg.SipTrunkBase
+	if basenr == "2" {
 		return fmt.Sprintf("2%d<2%d>", id, id)
 	} else {
 		return fmt.Sprintf("00%s2%d<00%s>", basenr, id, basenr)
 	}
 }
 
-func getSession(extension string) (*sipSession, error) {
-	files, err := os.ReadDir(defaultSessionPath)
+func getSession(extension string, sdir string) (*sipSession, error) {
+	files, err := os.ReadDir(sdir)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read from session directory %s: %v", defaultSessionPath, err)
+		return nil, fmt.Errorf("Failed to read from session directory %s: %v", sdir, err)
 	}
 	for _, file := range files {
-		filePath := filepath.Join(defaultSessionPath, file.Name())
+		filePath := filepath.Join(sdir, file.Name())
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 			session_content, err := os.ReadFile(filePath)
 			if err != nil {
@@ -75,8 +70,8 @@ func getSession(extension string) (*sipSession, error) {
 	return nil, fmt.Errorf("extension %s not found", extension)
 }
 
-func getSessions(pattern string) (*[]sipSession, error) {
-	files, err := os.ReadDir(defaultSessionPath)
+func getSessions(pattern string, sdir string) (*[]sipSession, error) {
+	files, err := os.ReadDir(sdir)
 	var sessions []sipSession
 	if err != nil {
 		return nil, err
@@ -87,7 +82,7 @@ func getSessions(pattern string) (*[]sipSession, error) {
 	} else {
 		found := false
 		for _, file := range files {
-			filePath := filepath.Join(defaultSessionPath, file.Name())
+			filePath := filepath.Join(sdir, file.Name())
 			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 				session_content, err := os.ReadFile(filePath)
 				if err != nil {
@@ -114,7 +109,7 @@ func getSessions(pattern string) (*[]sipSession, error) {
 	}
 }
 
-func Asterisk(c *gin.Context) {
+func Asterisk(ctx *gin.Context) {
 	SipEndpoint := map[string]string{
 		"type":                 "endpoint",
 		"moh_suggest":          "default",
@@ -140,48 +135,48 @@ func Asterisk(c *gin.Context) {
 		"remove_existing":   "yes",
 	}
 	is_single := false
-	if c.Param("singlemulti") == "single" {
+	if ctx.Param("singlemulti") == "single" {
 		is_single = true
 	}
-	slog.Info("Request received", "pstype", c.Param("pstype"), "single", is_single)
+	slog.Info("Request received", "pstype", ctx.Param("pstype"), "single", is_single)
 	var sessions []sipSession
 	if is_single {
-		id, found := c.GetPostForm("id")
+		id, found := ctx.GetPostForm("id")
 		if found {
-			session, err := getSession(id)
+			session, err := getSession(id, cfg.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *session)
 			} else {
 				slog.Warn("ID not found", "id", id)
-				c.String(http.StatusNotFound, "ID %s not found", id)
+				ctx.String(http.StatusNotFound, "ID %s not found", id)
 				return
 			}
 		} else {
 			slog.Warn("Parameter `id` not set")
-			c.String(http.StatusBadRequest, "Parameter `id` not set")
+			ctx.String(http.StatusBadRequest, "Parameter `id` not set")
 			return
 		}
 	} else {
 		//TODO: check if we need to implement any other parameters, I've seen requests to `mailboxes%20!%3D=` in the logs
-		idLike, found := c.GetPostForm("id LIKE")
+		idLike, found := ctx.GetPostForm("id LIKE")
 		if found {
 			idLikeRegex := "^" + strings.ReplaceAll(strings.ReplaceAll(idLike, "%", ".*"), "_", ".") + "$"
-			matched_sessions, err := getSessions(idLikeRegex)
+			matched_sessions, err := getSessions(idLikeRegex, cfg.Cfg.SessionDir)
 			if err == nil {
 				sessions = append(sessions, *matched_sessions...)
 			} else {
 				slog.Warn("ID LIKE not found", "idLike", idLike, "regex", idLikeRegex)
-				c.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
+				ctx.String(http.StatusNotFound, "ID LIKE %s not found", idLike)
 				return
 			}
 		} else {
 			slog.Warn("Parameter `id LIKE` not set")
-			c.String(http.StatusBadRequest, "Parameter `id LIKE` not set")
+			ctx.String(http.StatusBadRequest, "Parameter `id LIKE` not set")
 			return
 		}
 	}
 	if len(sessions) <= 0 {
-		c.String(http.StatusNotFound, "No ids found for request")
+		ctx.String(http.StatusNotFound, "No ids found for request")
 		return
 	}
 	slog.Info("Requested sessions", "sessions", sessions)
@@ -190,7 +185,7 @@ func Asterisk(c *gin.Context) {
 		ext := idToExt(s.Extension)
 		cid := idToCid(s.Extension)
 		slog.Info("Requested Extension", "extension", ext, "callerid", cid)
-		switch c.Param("pstype") {
+		switch ctx.Param("pstype") {
 		case "ps_endpoint":
 			endpoint := url.Values{}
 			endpoint.Add("id", ext)
@@ -220,10 +215,10 @@ func Asterisk(c *gin.Context) {
 			endpoint.Add("mailboxes", ext+"@default")
 			responseBody.WriteString(endpoint.Encode() + "\n")
 		default:
-			c.String(http.StatusBadRequest, "Request for %s unknown", c.Param("pstype"))
+			ctx.String(http.StatusBadRequest, "Request for %s unknown", ctx.Param("pstype"))
 			return
 		}
 	}
-	c.Data(http.StatusOK, "application/x-www-form-urlencoded", []byte(responseBody.String()))
+	ctx.Data(http.StatusOK, "application/x-www-form-urlencoded", []byte(responseBody.String()))
 	return
 }
