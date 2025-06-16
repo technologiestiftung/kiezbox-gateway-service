@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"kiezbox/api/routes"
+
 	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/meshtastic"
 	"kiezbox/logging"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // Using an interface as an intermediate layer instead of calling the meshtastic functions directly
@@ -20,10 +25,10 @@ type MeshtasticDevice interface {
 	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
 	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
 	DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
-	Settime(ctx context.Context, wg *sync.WaitGroup, time int64)
+	SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control)
 	GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
 	ConfigWriter(ctx context.Context, wg *sync.WaitGroup)
-	APIHandler(ctx context.Context, wg *sync.WaitGroup)
+	APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine)
 }
 
 // RunGoroutines orchestrates the goroutines that run the service.
@@ -46,7 +51,9 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	if cfg.Cfg.SetTime {
 		// We wait for the not info to set the time
 		wg.Add(1)
-		go device.Settime(ctx, wg, time.Now().Unix())
+		now := time.Now().Unix()
+		control := meshtastic.BuildKiezboxControl(&now, nil) // Set time, mode is nil
+		go device.SetKiezboxValues(ctx, wg, control)
 	}
 
 	// Process incoming KiexBox messages in its own goroutine
@@ -65,7 +72,11 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 
 	// Start the API in its own goroutine
 	wg.Add(1)
-	go device.APIHandler(ctx, wg)
+	// Create a new Gin router
+	r := gin.Default()
+	// Register API routes
+	routes.RegisterRoutes(r, device.(*meshtastic.MTSerial), ctx, wg)
+	go device.APIHandler(ctx, wg, r)
 }
 
 func main() {

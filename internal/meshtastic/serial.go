@@ -19,8 +19,8 @@ import (
 	"github.com/tarm/serial"
 	"google.golang.org/protobuf/proto"
 
-	"kiezbox/api/routes"
 	cfg "kiezbox/internal/config"
+
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
 )
@@ -60,6 +60,25 @@ type MTSerial struct {
 
 func interfaceIsNil(i interface{}) bool {
 	return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
+}
+
+// BuildKiezboxControl creates a KiezboxMessage_Control struct with the provided values.
+// Pass unixTime or mode as a pointer the other field as nil.
+// Currently, we can only set one of the two fields at a time.
+func BuildKiezboxControl(unixTime *int64, mode *int32) *generated.KiezboxMessage_Control {
+	control := &generated.KiezboxMessage_Control{}
+
+	if unixTime != nil {
+		control.Set = &generated.KiezboxMessage_Control_UnixTime{
+			UnixTime: *unixTime,
+		}
+	}
+	if mode != nil {
+		control.Set = &generated.KiezboxMessage_Control_Mode{
+			Mode: generated.KiezboxMessage_Mode(*mode),
+		}
+	}
+	return control
 }
 
 // Init initializes the serial device of an MTSerial object
@@ -136,6 +155,56 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 			slog.Info("Sending Heartbeat", "time", t)
 			mts.Write(Heartbeat)
 		}
+	}
+}
+
+// SetKiezboxValues sends a Kiezbox control message to the meshtastic device to set values such as time and mode.
+// Pass a pointer to generated.KiezboxMessage_Control with the desired fields set.
+func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
+	mts.WaitInfo.Wait()
+	slog.Info("Setting Kiezbox values:", "control", control)
+	defer wg.Done()
+
+	// Create the Kiezbox message with the provided control fields
+	kiezboxMessage := &generated.KiezboxMessage{
+		Control: control,
+	}
+
+	// Marshal the Kiezbox message
+	kiezboxData, err := proto.Marshal(kiezboxMessage)
+	if err != nil {
+		slog.Error("Failed to marshal KiezboxMessage", "err", err)
+	}
+
+	// Create the Data message
+	dataMessage := &generated.Data{
+		Portnum: generated.PortNum_KIEZBOX_CONTROL_APP,
+		Payload: kiezboxData,
+	}
+
+	// Create the MeshPacket
+	meshPacket := &generated.MeshPacket{
+		From:    0, // TODO: what should be sender id ?
+		To:      mts.MyInfo.MyNodeNum,
+		Channel: 2, // TODO: get Channel dynamically
+		PayloadVariant: &generated.MeshPacket_Decoded{
+			Decoded: dataMessage,
+		},
+	}
+
+	// Create the ToRadio message
+	toRadio := &generated.ToRadio{
+		PayloadVariant: &generated.ToRadio_Packet{
+			Packet: meshPacket,
+		},
+	}
+
+	// Check if the context has been canceled before attempting to write
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		mts.Write(toRadio)
 	}
 }
 
@@ -299,11 +368,13 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 			if buffer.Len() == 0 && b != start1 {
 				// Accumulate bytes for debug output.
 				if b == '\n' {
-					// Print debug output when a newline is detected.
-					// ascii := debugBuffer.String()
-					// hex := fmt.Sprintf("%x", debugBuffer.Bytes())
-					// log.Printf("DEBUG (ASCII): %s\n", ascii)
-					// log.Printf("Debug output (Hex): %s\n", hex)
+					if cfg.Cfg.LogSerial {
+						// Print debug output when a newline is detected.
+						ascii := debugBuffer.String()
+						// hex := fmt.Sprintf("%x", debugBuffer.Bytes())
+						slog.Info("DEBUG (ASCII):", "ascii", ascii)
+						// log.Printf("Debug output (Hex): %s\n", hex)
+					}
 					debugBuffer.Reset()
 				} else {
 					debugBuffer.WriteByte(b)
@@ -524,15 +595,9 @@ func (mts *MTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 // APIHandler starts the API for the Kiezbox Gateway Service.
-func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+func (mts *MTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine) {
 	// Decrement WaitGroup when function exits
 	defer wg.Done()
-
-	// Create a new Gin router
-	r := gin.Default()
-
-	// Register API routes
-	routes.RegisterRoutes(r)
 
 	// Configure the HTTP server
 	server := &http.Server{

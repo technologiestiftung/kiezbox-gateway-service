@@ -1061,6 +1061,7 @@ type ModuleConfig_KiezboxControlConfig struct {
 	// Sets the next (inteval) at which a status should be send
 	StatusInterval int32 `protobuf:"varint,2,opt,name=status_interval,json=statusInterval,proto3" json:"status_interval,omitempty"`
 	// Override the default power pin
+	// DEPRECATED! power pin is fixed for now
 	PowerPinOverride int32 `protobuf:"varint,3,opt,name=power_pin_override,json=powerPinOverride,proto3" json:"power_pin_override,omitempty"`
 	// ID of the kiexbox
 	BoxId int32 `protobuf:"varint,4,opt,name=box_id,json=boxId,proto3" json:"box_id,omitempty"`
@@ -1070,9 +1071,9 @@ type ModuleConfig_KiezboxControlConfig struct {
 	SensId int32 `protobuf:"varint,6,opt,name=sens_id,json=sensId,proto3" json:"sens_id,omitempty"`
 	// Power state target of the connected router
 	RouterPower bool `protobuf:"varint,7,opt,name=router_power,json=routerPower,proto3" json:"router_power,omitempty"`
-	// Mode target of the connected router
+	// Mode target for this kiezbox core (and connected router)
 	Mode KiezboxMessage_Mode `protobuf:"varint,8,opt,name=mode,proto3,enum=meshtastic.KiezboxMessage_Mode" json:"mode,omitempty"`
-	// Mode target of the connected router
+	// Device type of this kiezbox
 	DevType KiezboxMessage_DeviceType `protobuf:"varint,9,opt,name=dev_type,json=devType,proto3,enum=meshtastic.KiezboxMessage_DeviceType" json:"dev_type,omitempty"`
 	// Sets the warmup time for the sds dust sensor
 	SdsWarmupTime int32 `protobuf:"varint,10,opt,name=sds_warmup_time,json=sdsWarmupTime,proto3" json:"sds_warmup_time,omitempty"`

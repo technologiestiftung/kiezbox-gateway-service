@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/mock"
 	"github.com/tarm/serial"
 
 	cfg "kiezbox/internal/config"
 	"kiezbox/internal/db"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/meshtastic"
 )
 
@@ -64,8 +66,8 @@ func (m *MockMTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_clien
 	wg.Done()
 }
 
-func (m *MockMTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64) {
-	m.Called(ctx, wg, time)
+func (m *MockMTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
+	m.Called(ctx, wg, control)
 	wg.Done()
 }
 
@@ -79,7 +81,7 @@ func (m *MockMTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup) {
+func (m *MockMTSerial) APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine) {
 	m.Called(ctx, wg)
 	wg.Done()
 }
@@ -99,10 +101,10 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.On("MessageHandler", mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("DBWriter", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("DBRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	mockMTSerial.On("Settime", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("SetKiezboxValues", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second)).Return(nil)
 	mockMTSerial.On("ConfigWriter", mock.Anything, mock.Anything).Return(nil)
-	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything).Return(nil)
+	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	portFactory := func(conf *serial.Config) (meshtastic.SerialPort, error) {
 		return mockMTSerial, nil
@@ -134,10 +136,10 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "MessageHandler", mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBWriter", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBRetry", mock.Anything, mock.Anything, mock.Anything)
-	mockMTSerial.AssertCalled(t, "Settime", mock.Anything, mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "SetKiezboxValues", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second))
 	mockMTSerial.AssertCalled(t, "ConfigWriter", mock.Anything, mock.Anything)
-	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything)
+	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything, mock.Anything)
 
 	// Wait for all goroutines to finish
 	wg.Wait()
