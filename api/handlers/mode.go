@@ -4,10 +4,10 @@ import (
 	"context"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"sync"
 
 	cfg "kiezbox/internal/config"
+	"kiezbox/internal/github.com/meshtastic/go/generated"
 	"kiezbox/internal/meshtastic"
 
 	"github.com/gin-gonic/gin"
@@ -39,13 +39,12 @@ func SetMode(mts *meshtastic.MTSerial, ctx context.Context, wg *sync.WaitGroup) 
 	return func(c *gin.Context) {
 		// Extract the "mode" parameter from the URL
 		modeStr := c.Param("mode")
-		modeInt, err := strconv.Atoi(modeStr)
-		if err != nil || modeInt < 0 || modeInt > 2 {
+		mode, ok := generated.KiezboxMessage_Mode_value[modeStr]
+		if !ok {
 			// Respond with error if the mode is not a valid integer
-			c.JSON(400, gin.H{"error": "Invalid mode. Allowed values: 0, 1, 2"})
+			c.JSON(400, gin.H{"error": "Invalid mode."})
 			return
 		}
-		mode := int32(modeInt)
 
 		// Build the control message to set the desired mode
 		control := meshtastic.BuildKiezboxControl(nil, &mode)

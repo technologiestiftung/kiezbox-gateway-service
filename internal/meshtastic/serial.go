@@ -63,7 +63,8 @@ func interfaceIsNil(i interface{}) bool {
 }
 
 // BuildKiezboxControl creates a KiezboxMessage_Control struct with the provided values.
-// Pass unixTime as a pointer (or nil) and mode as a pointer (or nil) to set one or both fields.
+// Pass unixTime or mode as a pointer the other field as nil.
+// Currently, we can only set one of the two fields at a time.
 func BuildKiezboxControl(unixTime *int64, mode *int32) *generated.KiezboxMessage_Control {
 	control := &generated.KiezboxMessage_Control{}
 
