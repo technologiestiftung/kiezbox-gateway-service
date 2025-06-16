@@ -4,10 +4,10 @@ import (
 	"context"
 	"math/rand"
 	"net/http"
-	"os"
 	"strconv"
 	"sync"
 
+	cfg "kiezbox/internal/config"
 	"kiezbox/internal/meshtastic"
 
 	"github.com/gin-gonic/gin"
@@ -19,21 +19,17 @@ type SetModeRequest struct {
 }
 
 // GetMode fetches the current mode
-func GetMode(c *gin.Context) {
+func GetMode(ctx *gin.Context) {
 	// random number for demonstration purposes 1-3
 	var mode int
-	value := os.Getenv("KB_MODE_OVERRIDE")
-	if value == "" {
-		mode = rand.Intn(3)
+	if cfg.Cfg.ModeOverride {
+		mode = cfg.Cfg.Mode
 	} else {
-		converted, err := strconv.Atoi(value)
-		if err == nil {
-			mode = converted
-		} else {
-			mode = rand.Intn(3)
-		}
+		//TODO: implement retrieving real mode
+		// random number for demonstration purposes 1-3
+		mode = rand.Intn(3)
 	}
-	c.JSON(http.StatusOK, gin.H{
+	ctx.JSON(http.StatusOK, gin.H{
 		"mode": mode, // e.g., "normal", "maintenance"
 	})
 }
