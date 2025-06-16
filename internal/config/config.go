@@ -30,6 +30,7 @@ type GatewayConfig struct {
 	LogToFile     bool          `flag:"log_tofile|false|Enables logging to the logfile instead of standard output" default:"false"`
 	LogSource     bool          `flag:"log_source|true|Enables logging the filename with slog" default:"true"`
 	LogShortPath  bool          `flag:"log_shortpath|true|Enables short filename format (basename only) for slog" default:"true"`
+	LogSerial     bool          `flag:"log_serial|false|Enables logging the serial debug of the meshtastic device" default:"false"`
 	SipTrunkBase  string        `uci:"trunk_base|2|Sup trunk base phone number" env:"SIP_TRUNK_BASE" default:"2"`
 	BoxLat        float32       `uci:"geo_lat|0|Geolocation latitude of the box" env:"BOX_LAT" default:"0"`
 	BoxLon        float32       `uci:"geo_lon|0|Geolocation longitude of the box" env:"BOX_LON" default:"0"`

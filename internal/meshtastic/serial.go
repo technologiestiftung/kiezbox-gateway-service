@@ -368,11 +368,13 @@ func (mts *MTSerial) Reader(ctx context.Context, wg *sync.WaitGroup) {
 			if buffer.Len() == 0 && b != start1 {
 				// Accumulate bytes for debug output.
 				if b == '\n' {
-					// Print debug output when a newline is detected.
-					// ascii := debugBuffer.String()
-					// hex := fmt.Sprintf("%x", debugBuffer.Bytes())
-					// log.Printf("DEBUG (ASCII): %s\n", ascii)
-					// log.Printf("Debug output (Hex): %s\n", hex)
+					if cfg.Cfg.LogSerial {
+						// Print debug output when a newline is detected.
+						ascii := debugBuffer.String()
+						// hex := fmt.Sprintf("%x", debugBuffer.Bytes())
+						slog.Info("DEBUG (ASCII):", "ascii", ascii)
+						// log.Printf("Debug output (Hex): %s\n", hex)
+					}
 					debugBuffer.Reset()
 				} else {
 					debugBuffer.WriteByte(b)
