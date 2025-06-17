@@ -77,10 +77,10 @@ To run the API:
 go run cmd/main.go
 ```
 
-You can send API requests using cURL:
+You can send API requests using cURL, like in the following examples:
 
 ```
-curl -X GET http://localhost:9080/mode
+curl -X POST "http://localhost:9080/admin/control?key=mode&value=emergency"
 ```
 
 ## Logging

@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net/http"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -62,23 +63,81 @@ func interfaceIsNil(i interface{}) bool {
 	return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
 }
 
-// BuildKiezboxControl creates a KiezboxMessage_Control struct with the provided values.
-// Pass unixTime or mode as a pointer the other field as nil.
-// Currently, we can only set one of the two fields at a time.
-func BuildKiezboxControl(unixTime *int64, mode *int32) *generated.KiezboxMessage_Control {
-	control := &generated.KiezboxMessage_Control{}
+// BuildKiezboxControlMessage creates a Control message with only one field set, based on key and value.
+// TODO: Ideally, we should refactor to simplify the duplicated logic and extract the fields dinamically from the protobuf generated code.
+func BuildKiezboxControlMessage(key string, value string) *generated.KiezboxMessage_Control {
+	message := &generated.KiezboxMessage_Control{}
 
-	if unixTime != nil {
-		control.Set = &generated.KiezboxMessage_Control_UnixTime{
-			UnixTime: *unixTime,
+	switch key {
+	case "mode":
+		v, ok := generated.KiezboxMessage_Mode_value[value]
+		if !ok {
+			slog.Error("Invalid mode value", "value", value)
+			return nil
 		}
-	}
-	if mode != nil {
-		control.Set = &generated.KiezboxMessage_Control_Mode{
-			Mode: generated.KiezboxMessage_Mode(*mode),
+		message.Set = &generated.KiezboxMessage_Control_Mode{
+			Mode: generated.KiezboxMessage_Mode(v),
 		}
+	case "unix_time":
+		v, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			slog.Error("Invalid unix_time value", "value", value)
+			return nil
+		}
+		message.Set = &generated.KiezboxMessage_Control_UnixTime{
+			UnixTime: v,
+		}
+	case "router_power":
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			slog.Error("Invalid router_power value", "value", value)
+			return nil
+		}
+		message.Set = &generated.KiezboxMessage_Control_RouterPower{
+			RouterPower: v,
+		}
+	case "box_id":
+		v, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			slog.Error("Invalid box_id value", "value", value)
+			return nil
+		}
+		message.Set = &generated.KiezboxMessage_Control_BoxId{
+			BoxId: uint32(v),
+		}
+	case "dist_id":
+		v, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			slog.Error("Invalid dist_id value", "value", value)
+			return nil
+		}
+		message.Set = &generated.KiezboxMessage_Control_DistId{
+			DistId: uint32(v),
+		}
+	case "sens_id":
+		v, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			slog.Error("Invalid sens_id value", "value", value)
+			return nil
+		}
+		message.Set = &generated.KiezboxMessage_Control_SensId{
+			SensId: uint32(v),
+		}
+	case "status_interval":
+		v, err := strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			slog.Error("Invalid status_interval value", "value", value)
+			return nil
+		}
+		message.Set = &generated.KiezboxMessage_Control_StatusInterval{
+			StatusInterval: int32(v),
+		}
+	default:
+		slog.Error("Unknown key for Kiezbox control", "key", key, "value", value)
+		return nil
 	}
-	return control
+
+	return message
 }
 
 // Init initializes the serial device of an MTSerial object
@@ -158,14 +217,13 @@ func (mts *MTSerial) Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval
 	}
 }
 
-// SetKiezboxValues sends a Kiezbox control message to the meshtastic device to set values such as time and mode.
-// Pass a pointer to generated.KiezboxMessage_Control with the desired fields set.
-func (mts *MTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
+// SetKiezboxControlValue sends a Kiezbox control message to the meshtastic device in order to set a Kiezbox control value.
+func (mts *MTSerial) SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
 	mts.WaitInfo.Wait()
 	slog.Info("Setting Kiezbox values:", "control", control)
 	defer wg.Done()
 
-	// Create the Kiezbox message with the provided control fields
+	// Create the Kiezbox message with the provided control field
 	kiezboxMessage := &generated.KiezboxMessage{
 		Control: control,
 	}

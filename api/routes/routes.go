@@ -36,5 +36,5 @@ func RegisterRoutes(r *gin.Engine, mts *meshtastic.MTSerial, ctx context.Context
 	r.GET("/info", handlers.Info)
 	r.Any("/session", handlers.Session)
 	r.POST("/asterisk/:pstype/:singlemulti", handlers.Asterisk)
-	r.POST("/mode/:mode", handlers.SetMode(mts, ctx, wg))
+	r.POST("/admin/control", handlers.SetKiezboxControlValue(mts, ctx, wg))
 }
