@@ -596,6 +596,7 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 			dataMessage := &generated.Data{
 				Portnum: generated.PortNum_ADMIN_APP, // Replace with the appropriate port number
 				Payload: adminData,
+				WantResponse: true,
 			}
 
 			// Create the MeshPacket
