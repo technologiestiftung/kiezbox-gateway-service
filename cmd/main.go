@@ -44,7 +44,7 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	wg.Add(1)
 	go device.MessageHandler(ctx, wg)
 	wg.Add(1)
-	go device.GetConfig(ctx, wg, 5*time.Second)
+	go device.GetConfig(ctx, wg, 15*time.Second)
 	wg.Add(1)
 	go device.ConfigWriter(ctx, wg)
 
