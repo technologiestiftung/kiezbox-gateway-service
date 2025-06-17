@@ -615,10 +615,9 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 				},
 			}
 
+			slog.Info("Sending config request")
 			// Send the message
 			mts.Write(toRadio)
-
-			fmt.Println("Sending config request")
 		}
 	}
 }
