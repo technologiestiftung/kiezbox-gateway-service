@@ -24,6 +24,7 @@ import (
 
 	"kiezbox/internal/db"
 	"kiezbox/internal/github.com/meshtastic/go/generated"
+	"kiezbox/internal/state"
 )
 
 // Constants used in the meshtastic stream protocol
@@ -594,8 +595,8 @@ func (mts *MTSerial) GetConfig(ctx context.Context, wg *sync.WaitGroup, interval
 
 			// Create the Data message
 			dataMessage := &generated.Data{
-				Portnum: generated.PortNum_ADMIN_APP, // Replace with the appropriate port number
-				Payload: adminData,
+				Portnum:      generated.PortNum_ADMIN_APP, // Replace with the appropriate port number
+				Payload:      adminData,
 				WantResponse: true,
 			}
 
@@ -642,10 +643,9 @@ func (mts *MTSerial) ConfigWriter(ctx context.Context, wg *sync.WaitGroup) {
 				kiezboxControl := config.GetKiezboxControl()
 				if kiezboxControl != nil {
 					mode := kiezboxControl.GetMode()
-					// TODO: Get rid of print statements and save value so it can be retrieved by the API
-					fmt.Printf("Current mode: %d\n", mode)
-				} else {
-					fmt.Println("Mode is nil")
+					// Save mode in the global state
+					state.SetMode(mode)
+					slog.Info("Wrote current mode to global state", "mode", mode)
 				}
 			}
 		}
