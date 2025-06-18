@@ -14,8 +14,8 @@ import (
 func SetKiezboxControlValue(mts *meshtastic.MTSerial, ctx context.Context, wg *sync.WaitGroup) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		// Extract key and value parameters from the query string
-		key := ginCtx.Query("key")
-		value := ginCtx.Query("value")
+		key := ginCtx.PostForm("key")
+		value := ginCtx.PostForm("value")
 		if key == "" || value == "" {
 			ginCtx.JSON(400, gin.H{"error": "Missing key or value query parameter."})
 			return
