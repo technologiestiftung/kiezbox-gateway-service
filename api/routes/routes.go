@@ -27,7 +27,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func RegisterRoutes(r *gin.Engine, mts *meshtastic.MTSerial, ctx context.Context, wg *sync.WaitGroup) {
+func RegisterRoutes(r *gin.Engine, device meshtastic.MeshtasticDevice, ctx context.Context, wg *sync.WaitGroup) {
 	// Use Corse middlewar only for local testing
 	if cfg.Cfg.CorsLocalhost {
 		r.Use(CORSMiddleware())
@@ -36,5 +36,5 @@ func RegisterRoutes(r *gin.Engine, mts *meshtastic.MTSerial, ctx context.Context
 	r.GET("/info", handlers.Info)
 	r.Any("/session", handlers.Session)
 	r.POST("/asterisk/:pstype/:singlemulti", handlers.Asterisk)
-	r.POST("/admin/control", handlers.SetKiezboxControlValue(mts, ctx, wg))
+	r.POST("/admin/control", handlers.SetKiezboxControlValue(device, ctx, wg))
 }
