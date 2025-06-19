@@ -66,7 +66,7 @@ func (m *MockMTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_clien
 	wg.Done()
 }
 
-func (m *MockMTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
+func (m *MockMTSerial) SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
 	m.Called(ctx, wg, control)
 	wg.Done()
 }
