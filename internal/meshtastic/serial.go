@@ -60,6 +60,21 @@ type MTSerial struct {
 	portFactory PortFactory
 }
 
+// Using an interface as an intermediate layer instead of calling the meshtastic functions directly
+// allows for dependency injection, essential for unittesting
+type MeshtasticDevice interface {
+	Writer(ctx context.Context, wg *sync.WaitGroup)
+	Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
+	Reader(ctx context.Context, wg *sync.WaitGroup)
+	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
+	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
+	DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
+	SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control)
+	GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
+	ConfigWriter(ctx context.Context, wg *sync.WaitGroup)
+	APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine)
+}
+
 func interfaceIsNil(i interface{}) bool {
 	return i == nil || (reflect.ValueOf(i).Kind() == reflect.Ptr && reflect.ValueOf(i).IsNil())
 }

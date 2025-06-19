@@ -11,7 +11,7 @@ import (
 )
 
 // SetKiezboxControlValue sets a Kiezbox control value based on the provided key and value
-func SetKiezboxControlValue(mts *meshtastic.MTSerial, ctx context.Context, wg *sync.WaitGroup) gin.HandlerFunc {
+func SetKiezboxControlValue(device meshtastic.MeshtasticDevice, ctx context.Context, wg *sync.WaitGroup) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		// Extract key and value parameters from the query string
 		key := ginCtx.PostForm("key")
@@ -29,7 +29,7 @@ func SetKiezboxControlValue(mts *meshtastic.MTSerial, ctx context.Context, wg *s
 		}
 
 		// Set the control value
-		go mts.SetKiezboxControlValue(ctx, wg, control)
+		go device.SetKiezboxControlValue(ctx, wg, control)
 		// Reply to the client with success
 		ginCtx.JSON(http.StatusOK, gin.H{"status": "control value set", "key": key, "value": value})
 	}
