@@ -21,13 +21,9 @@ func SetMode(newMode generated.KiezboxMessage_Mode) {
 }
 
 // GetMode safely gets the Mode field of the global State as a string
-func GetMode() string {
+
+func GetMode() int {
 	State.mutex.RLock()
 	defer State.mutex.RUnlock()
-	modeInt := int32(State.mode)
-	modeStr, ok := generated.KiezboxMessage_Mode_name[modeInt]
-	if ok {
-		return modeStr
-	}
-	return ""
+	return int(State.mode)
 }
