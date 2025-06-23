@@ -31,9 +31,9 @@ type GatewayConfig struct {
 	LogSource     bool          `flag:"log_source|true|Enables logging the filename with slog" default:"true"`
 	LogShortPath  bool          `flag:"log_shortpath|true|Enables short filename format (basename only) for slog" default:"true"`
 	LogSerial     bool          `flag:"log_serial|false|Enables logging the serial debug of the meshtastic device" default:"false"`
-	SipTrunkBase  string        `uci:"trunk_base|2|Sup trunk base phone number" env:"SIP_TRUNK_BASE" default:"2"`
-	BoxLat        float32       `uci:"geo_lat|0|Geolocation latitude of the box" env:"BOX_LAT" default:"0"`
-	BoxLon        float32       `uci:"geo_lon|0|Geolocation longitude of the box" env:"BOX_LON" default:"0"`
+	SipTrunkBase  string        `uci:"trunk_base" env:"SIP_TRUNK_BASE" default:"2"`
+	BoxLat        float32       `uci:"geo_lat" env:"BOX_LAT" default:"0"`
+	BoxLon        float32       `uci:"geo_lon" env:"BOX_LON" default:"0"`
 	Mode          int           `flag:"mode|0|Default device mode as defined in the protobuf" env:"KB_MODE" default:"0"`
 	ModeOverride  bool          `flag:"mode_override|false|Enables overwriting the device mode with the cli/env flag" env:"KB_MODE_OVERRIDE" default:"false"`
 	CorsLocalhost bool          `flag:"cors_localhost|false|Adds CORS header for local testing only" env:"CORS_LOCALHOST" default:"false"`
