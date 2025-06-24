@@ -66,7 +66,7 @@ func (m *MockMTSerial) DBRetry(ctx context.Context, wg *sync.WaitGroup, db_clien
 	wg.Done()
 }
 
-func (m *MockMTSerial) SetKiezboxValues(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
+func (m *MockMTSerial) SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control) {
 	m.Called(ctx, wg, control)
 	wg.Done()
 }
@@ -102,7 +102,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.On("DBWriter", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("DBRetry", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("SetKiezboxControlValue", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	mockMTSerial.On("GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second)).Return(nil)
+	mockMTSerial.On("GetConfig", mock.Anything, mock.Anything, time.Duration(15*time.Second)).Return(nil)
 	mockMTSerial.On("ConfigWriter", mock.Anything, mock.Anything).Return(nil)
 	mockMTSerial.On("APIHandler", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -137,7 +137,7 @@ func TestRunGoroutines(t *testing.T) {
 	mockMTSerial.AssertCalled(t, "DBWriter", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "DBRetry", mock.Anything, mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "SetKiezboxControlValue", mock.Anything, mock.Anything, mock.Anything)
-	mockMTSerial.AssertCalled(t, "GetConfig", mock.Anything, mock.Anything, time.Duration(30*time.Second))
+	mockMTSerial.AssertCalled(t, "GetConfig", mock.Anything, mock.Anything, time.Duration(15*time.Second))
 	mockMTSerial.AssertCalled(t, "ConfigWriter", mock.Anything, mock.Anything)
 	mockMTSerial.AssertCalled(t, "APIHandler", mock.Anything, mock.Anything, mock.Anything)
 

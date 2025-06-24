@@ -16,23 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Using an interface as an intermediate layer instead of calling the meshtastic functions directly
-// allows for dependency injection, essential for unittesting.
-type MeshtasticDevice interface {
-	Writer(ctx context.Context, wg *sync.WaitGroup)
-	Heartbeat(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
-	Reader(ctx context.Context, wg *sync.WaitGroup)
-	MessageHandler(ctx context.Context, wg *sync.WaitGroup)
-	DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
-	DBRetry(ctx context.Context, wg *sync.WaitGroup, db_client *db.InfluxDB)
-	SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGroup, control *generated.KiezboxMessage_Control)
-	GetConfig(ctx context.Context, wg *sync.WaitGroup, interval time.Duration)
-	ConfigWriter(ctx context.Context, wg *sync.WaitGroup)
-	APIHandler(ctx context.Context, wg *sync.WaitGroup, r *gin.Engine)
-}
-
 // RunGoroutines orchestrates the goroutines that run the service.
-func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDevice, db_client *db.InfluxDB) {
+func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device meshtastic.MeshtasticDevice, db_client *db.InfluxDB) {
 	// Launch goroutines
 	//TODO: refactor this function, as it is a little clumsy with all the manual waitgroup stuff
 	wg.Add(1)
@@ -79,7 +64,7 @@ func RunGoroutines(ctx context.Context, wg *sync.WaitGroup, device MeshtasticDev
 	// Create a new Gin router
 	r := gin.Default()
 	// Register API routes
-	routes.RegisterRoutes(r, device.(*meshtastic.MTSerial), ctx, wg)
+	routes.RegisterRoutes(r, device, ctx, wg)
 	go device.APIHandler(ctx, wg, r)
 }
 
@@ -99,7 +84,6 @@ func main() {
 
 	// Initialize meshtastic serial connection
 	var mts meshtastic.MTSerial
-
 	mts.Init(meshtastic.CreateSerialPort)
 
 	// Initialize InfluxDB client
