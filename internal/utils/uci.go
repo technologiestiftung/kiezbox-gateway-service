@@ -9,7 +9,7 @@ import (
 func UciGet(key string) (string, error) {
 	output, err := exec.Command("uci", "get", key).Output()
 	if err != nil {
-		slog.Error("uci_get error", "err", err)
+		slog.Error("uci_get error",  "key", key, "err", err)
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
