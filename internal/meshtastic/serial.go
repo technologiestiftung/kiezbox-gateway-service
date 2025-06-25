@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand"
 	"net/http"
 	"reflect"
@@ -259,8 +260,8 @@ func (mts *MTSerial) SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGr
 	// Create the MeshPacket
 	meshPacket := &generated.MeshPacket{
 		From:    0, // TODO: what should be sender id ?
-		To:      mts.MyInfo.MyNodeNum,
-		Channel: 2, // TODO: get Channel dynamically
+		To:      math.MaxUint32,
+		Channel: 1, // TODO: get Channel dynamically
 		PayloadVariant: &generated.MeshPacket_Decoded{
 			Decoded: dataMessage,
 		},
