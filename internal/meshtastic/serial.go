@@ -82,7 +82,7 @@ func interfaceIsNil(i interface{}) bool {
 
 // BuildKiezboxControlMessage creates a Control message with only one field set, based on key and value.
 // TODO: Ideally, we should refactor to simplify the duplicated logic and extract the fields dinamically from the protobuf generated code.
-func BuildKiezboxControlMessage(key string, value string) *generated.KiezboxMessage_Control {
+func BuildKiezboxControlMessage(key string, value string, filter []string) *generated.KiezboxMessage_Control {
 	message := &generated.KiezboxMessage_Control{}
 
 	switch key {
@@ -153,7 +153,44 @@ func BuildKiezboxControlMessage(key string, value string) *generated.KiezboxMess
 		slog.Error("Unknown key for Kiezbox control", "key", key, "value", value)
 		return nil
 	}
-
+	//TODO: improve this hacky code. the whole function needs rework based on protobuf reflections. so it does not feel that bad
+	if filter[0] != "" {
+		val, err := strconv.Atoi(filter[0])
+		if err != nil {
+			slog.Error("Invalid box_id", "value", filter[0])
+			return nil
+		} else {
+			message.Meta.BoxId = proto.Uint32(uint32(val))
+		}
+	}
+	if filter[1] != "" {
+		val, err := strconv.Atoi(filter[1])
+		if err != nil {
+			slog.Error("Invalid dist_id", "value", filter[1])
+			return nil
+		} else {
+			message.Meta.DistId = proto.Uint32(uint32(val))
+		}
+	}
+	if filter[2] != "" {
+		val, err := strconv.Atoi(filter[2])
+		if err != nil {
+			slog.Error("Invalid sens_id", "value", filter[2])
+			return nil
+		} else {
+			message.Meta.SensId = proto.Uint32(uint32(val))
+		}
+	}
+	if filter[3] != "" {
+		val, err := strconv.Atoi(filter[3])
+		if err != nil {
+			slog.Error("Invalid dev_type", "value", filter[3])
+			return nil
+		} else {
+			dt := generated.KiezboxMessage_DeviceType(val)
+			message.Meta.DevType = &dt
+		}
+	}
 	return message
 }
 

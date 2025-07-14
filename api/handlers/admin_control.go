@@ -16,13 +16,14 @@ func SetKiezboxControlValue(device meshtastic.MeshtasticDevice, ctx context.Cont
 		// Extract key and value parameters from the query string
 		key := ginCtx.PostForm("key")
 		value := ginCtx.PostForm("value")
+		filter := []string{ginCtx.PostForm("box_id"),ginCtx.PostForm("dist_id"),ginCtx.PostForm("sens_id"),ginCtx.PostForm("dev_type")}
 		if key == "" || value == "" {
 			ginCtx.JSON(400, gin.H{"error": "Missing key or value query parameter."})
 			return
 		}
 
 		// Build the control message for the provided key and value
-		control := meshtastic.BuildKiezboxControlMessage(key, value)
+		control := meshtastic.BuildKiezboxControlMessage(key, value, filter)
 		if control == nil {
 			ginCtx.JSON(400, gin.H{"error": "Invalid key or value."})
 			return
