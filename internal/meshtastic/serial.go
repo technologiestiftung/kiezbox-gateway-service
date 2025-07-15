@@ -84,6 +84,7 @@ func interfaceIsNil(i interface{}) bool {
 // TODO: Ideally, we should refactor to simplify the duplicated logic and extract the fields dinamically from the protobuf generated code.
 func BuildKiezboxControlMessage(key string, value string, filter []string) *generated.KiezboxMessage_Control {
 	message := &generated.KiezboxMessage_Control{}
+	message.Meta = &generated.KiezboxMessage_Meta{}
 
 	switch key {
 	case "mode":
