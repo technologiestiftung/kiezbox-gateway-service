@@ -297,9 +297,10 @@ func (mts *MTSerial) SetKiezboxControlValue(ctx context.Context, wg *sync.WaitGr
 
 	// Create the MeshPacket
 	meshPacket := &generated.MeshPacket{
-		From:    0, // TODO: what should be sender id ?
+		From:    mts.MyInfo.MyNodeNum, // TODO: what should be sender id ?
 		To:      math.MaxUint32,
 		Channel: 1, // TODO: get Channel dynamically
+		HopLimit: 3,
 		PayloadVariant: &generated.MeshPacket_Decoded{
 			Decoded: dataMessage,
 		},
@@ -353,7 +354,7 @@ func (mts *MTSerial) Settime(ctx context.Context, wg *sync.WaitGroup, time int64
 	meshPacket := &generated.MeshPacket{
 		From:    0, //TODO: what should be sender id ?
 		To:      mts.MyInfo.MyNodeNum,
-		Channel: 2, //TODO: get Channel dynamically
+		Channel: 1, //TODO: get Channel dynamically
 		PayloadVariant: &generated.MeshPacket_Decoded{
 			Decoded: dataMessage,
 		},
@@ -553,7 +554,10 @@ func (mts *MTSerial) DBWriter(ctx context.Context, wg *sync.WaitGroup, db_client
 			if message == nil {
 				continue
 			}
-
+			if message.Update == nil {
+				slog.Warn("DBwriter only handles Update messages. skipping.")
+				continue
+			}
 			// Set the arrival time to the current time
 			message.Update.ArrivalTime = proto.Int64(time.Now().Unix())
 
