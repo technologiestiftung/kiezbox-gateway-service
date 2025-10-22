@@ -52,7 +52,7 @@ go mod tidy
 
 Run the main fail to test the module.
 ```
-go run cmd/main.go
+go run kb-gateway/main.go
 ```
 
 ## Unittests
@@ -74,7 +74,7 @@ go tool cover -html=coverage.out
 To run the API:
 
 ```
-go run cmd/main.go
+go run kb-gateway/main.go
 ```
 
 You can send API requests using cURL, like in the following examples:
